@@ -1,0 +1,13 @@
+data,regiao,produto,canal,quantidade,receita
+2026-01-05,Sudeste,Produto A,Online,120,24000
+2026-01-12,Sul,Produto B,Loja,80,12000
+2026-01-20,Nordeste,Produto A,Online,60,12000
+2026-02-03,Sudeste,Produto C,Loja,40,16000
+2026-02-14,Centro-Oeste,Produto B,Online,55,8250
+2026-02-22,Sul,Produto A,Loja,90,18000
+2026-03-02,Norte,Produto C,Online,20,8000
+2026-03-15,Sudeste,Produto B,Online,150,22500
+2026-03-28,Nordeste,Produto C,Loja,35,14000
+2026-04-04,Sudeste,Produto A,Loja,110,22000
+2026-04-18,Sul,Produto C,Online,45,18000
+2026-04-25,Norte,Produto A,Loja,25,5000
