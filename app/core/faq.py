@@ -1,21 +1,16 @@
-"""Agente de FAQ: perguntas estáticas gerais."""
+"""Agente de FAQ: responde dúvidas gerais com base no FAQ indexado no Qdrant."""
+from app.config import FAQ_LIMITE
 from app.core.base import criar_chain
+from app.prompts.faq import FAQ_PROMPT, SEM_FAQ
+from app.repository.faq_repository import buscar_faq
 from app.schemas.agentes import RespostaEspecialista
-from app.tools.faq_tool import faq_como_texto
 
-SYSTEM_PROMPT = """Você é o agente de FAQ da NexUs.
-Responda SOMENTE com base nas perguntas frequentes abaixo. Se a resposta não estiver nelas,
-diga que não encontrou essa informação no FAQ e sugira reformular ou perguntar sobre os dados.
-Para saudações simples, cumprimente e explique que pode responder dúvidas gerais, analisar os dados e dar recomendações.
 
-=== FAQ ===
-{contexto}
-=== FIM FAQ ==="""
-
-SEM_FAQ = "(FAQ ainda não cadastrado.)"
+def _formatar(itens: list[dict]) -> str:
+    return "\n\n".join(f"P: {i.get('pergunta', '')}\nR: {i.get('resposta', '')}" for i in itens)
 
 
 def agente_faq(usuario: str, historico: list) -> RespostaEspecialista:
-    contexto = faq_como_texto() or SEM_FAQ
-    resposta = criar_chain(SYSTEM_PROMPT).invoke({"usuario": usuario, "historico": historico, "contexto": contexto})
+    contexto = _formatar(buscar_faq(usuario, FAQ_LIMITE)) or SEM_FAQ
+    resposta = criar_chain(FAQ_PROMPT).invoke({"usuario": usuario, "historico": historico, "contexto": contexto})
     return RespostaEspecialista(resposta=resposta, contexto=contexto)
