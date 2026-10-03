@@ -1,56 +1,27 @@
-"""CLI do assistente multiagente NexUs BI.
+"""API do NexUs BI (multiagente).
 
-Rodar a partir da raiz do projeto:
-    python -m app.app            # modo normal
-    python -m app.app --debug    # mostra rota, veredito do juiz e guardrails
-
-Comandos: 'exit' ou 'sair' encerram | 'limpar' apaga a memória da sessão.
+Rodar na raiz do projeto:
+    uvicorn app.app:app --reload
+Documentação interativa: http://localhost:8000/docs
 """
-import sys
-import uuid
+from fastapi import FastAPI
 
-from app.controller.orquestrador import Orquestrador
-from app.core.memory import limpar_sessao
+from app.config import validar_config
+from app.controller import chat_controller
 
-SAIR = {"exit", "sair", "quit"}
+for problema in validar_config():
+    print(f"[config] ATENÇÃO: {problema}")
 
+app = FastAPI(
+    title="NexUs BI AI",
+    description="Assistente multiagente de BI: guardrails, roteador, FAQ, analista, recomendador, orquestrador e juiz.",
+    version="0.1.0",
+)
 
-def main() -> None:
-    debug = "--debug" in sys.argv
-    session_id = str(uuid.uuid4())  # memória vale só para esta execução
-    orq = Orquestrador(session_id)
-
-    print("NexUs BI - assistente multiagente. Digite 'exit' para sair.\n")
-    while True:
-        try:
-            mensagem = input("> ").strip()
-        except (EOFError, KeyboardInterrupt):
-            print()
-            break
-
-        if not mensagem:
-            continue
-        if mensagem.lower() in SAIR:
-            break
-        if mensagem.lower() == "limpar":
-            limpar_sessao(session_id)
-            print("Memória da sessão apagada.\n")
-            continue
-
-        try:
-            resultado = orq.processar(mensagem)
-        except Exception as e:  # noqa: BLE001
-            print(f"[erro] {e}\n")
-            continue
-
-        if debug:
-            for passo in resultado.passos:
-                print(f"  · {passo}")
-        print(f"- {resultado.resposta}\n")
-
-    limpar_sessao(session_id)
-    print("Encerrando a conversa.")
+app.include_router(chat_controller.router)
 
 
-if __name__ == "__main__":
-    main()
+@app.get("/health", tags=["infra"])
+def health() -> dict:
+    problemas = validar_config()
+    return {"status": "ok" if not problemas else "atencao", "problemas_de_configuracao": problemas}
