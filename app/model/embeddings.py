@@ -1,4 +1,4 @@
-"""Fábrica de embeddings (usados para indexar e buscar o FAQ no Qdrant)."""
+"""Embeddings factory (used to index and search the FAQ in Qdrant)."""
 from functools import lru_cache
 
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
@@ -13,9 +13,9 @@ def _embeddings() -> GoogleGenerativeAIEmbeddings:
     return GoogleGenerativeAIEmbeddings(model=EMBEDDING_MODEL, google_api_key=GOOGLE_API_KEY)
 
 
-def gerar_embedding(texto: str) -> list[float]:
-    return _embeddings().embed_query(texto, output_dimensionality=EMBEDDING_DIM)
+def embed_text(text: str) -> list[float]:
+    return _embeddings().embed_query(text, output_dimensionality=EMBEDDING_DIM)
 
 
-def gerar_embeddings(textos: list[str]) -> list[list[float]]:
-    return _embeddings().embed_documents(textos, output_dimensionality=EMBEDDING_DIM)
+def embed_texts(texts: list[str]) -> list[list[float]]:
+    return _embeddings().embed_documents(texts, output_dimensionality=EMBEDDING_DIM)

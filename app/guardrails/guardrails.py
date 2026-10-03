@@ -1,13 +1,13 @@
-"""Guardrails de entrada e saída (regras fixas, sem LLM).
+"""Input and output guardrails (fixed rules, no LLM).
 
-- Entrada: bloqueia injeção de prompt, conteúdo ilegal e PII digitada pelo usuário.
-- Saída: mascara PII (CPF, CNPJ, e-mail, telefone, cartão) antes de mostrar ao usuário.
+- Input: blocks prompt injection, illegal content and PII typed by the user.
+- Output: masks PII (CPF, CNPJ, e-mail, phone, card) before showing it to the user.
 """
 import re
 
-from app.schemas.agentes import ResultadoGuardrail
+from app.schemas.agents import GuardrailResult
 
-PADROES_INJECAO = [
+INJECTION_PATTERNS = [
     r"ignore (as|todas as)? ?(instru[cç][oõ]es|regras)",
     r"esque[cç]a (as|suas)? ?(instru[cç][oõ]es|regras)",
     r"ignore (all|previous|the above) instructions",
@@ -18,7 +18,7 @@ PADROES_INJECAO = [
     r"jailbreak",
 ]
 
-PADROES_ILEGAIS = [
+ILLEGAL_PATTERNS = [
     r"lavar dinheiro|lavagem de dinheiro",
     r"sonega[rç]",
     r"fraud(ar|e)",
@@ -27,39 +27,41 @@ PADROES_ILEGAIS = [
     r"suborn",
 ]
 
-PADROES_PII = {
-    "CPF": r"\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b",
-    "CNPJ": r"\b\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}\b",
-    "CARTAO": r"\b(?:\d[ -]?){13,16}\b",
-    "EMAIL": r"\b[\w.+-]+@[\w-]+\.[\w.-]+\b",
-    "TELEFONE": r"\(?\b\d{2}\)?\s?9?\d{4}-?\d{4}\b",
-}
+# (pattern, label shown to the user). CNPJ comes before CPF/card so it is not masked halfway.
+PII_PATTERNS = [
+    (r"\b\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}\b", "CNPJ"),
+    (r"\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b", "CPF"),
+    (r"\b(?:\d[ -]?){13,16}\b", "CARTAO"),
+    (r"\b[\w.+-]+@[\w-]+\.[\w.-]+\b", "EMAIL"),
+    (r"\(?\b\d{2}\)?\s?9?\d{4}-?\d{4}\b", "TELEFONE"),
+]
+
+MAX_INPUT_LENGTH = 2000
 
 
-def _bate(padroes: list[str], texto: str) -> bool:
-    return any(re.search(p, texto, flags=re.IGNORECASE) for p in padroes)
+def _matches(patterns: list[str], text: str) -> bool:
+    return any(re.search(p, text, flags=re.IGNORECASE) for p in patterns)
 
 
-def mascarar_pii(texto: str) -> str:
-    # CNPJ antes de CPF/cartão para não ser mascarado pela metade
-    for nome in ("CNPJ", "CPF", "CARTAO", "EMAIL", "TELEFONE"):
-        texto = re.sub(PADROES_PII[nome], f"[{nome} REMOVIDO]", texto, flags=re.IGNORECASE)
-    return texto
+def mask_pii(text: str) -> str:
+    for pattern, label in PII_PATTERNS:
+        text = re.sub(pattern, f"[{label} REMOVIDO]", text, flags=re.IGNORECASE)
+    return text
 
 
-def guardrail_entrada(texto: str) -> ResultadoGuardrail:
-    t = texto.strip()
-    if not t:
-        return ResultadoGuardrail(permitido=False, motivo="Mensagem vazia.")
-    if len(t) > 2000:
-        return ResultadoGuardrail(permitido=False, motivo="Mensagem muito longa (limite de 2000 caracteres).")
-    if _bate(PADROES_INJECAO, t):
-        return ResultadoGuardrail(permitido=False, motivo="Não posso atender a esse pedido: ele tenta alterar minhas regras ou acessar dados restritos.")
-    if _bate(PADROES_ILEGAIS, t):
-        return ResultadoGuardrail(permitido=False, motivo="Não posso ajudar com atividades ilegais.")
-    # PII digitada pelo usuário não segue para a LLM
-    return ResultadoGuardrail(permitido=True, texto=mascarar_pii(t))
+def input_guardrail(text: str) -> GuardrailResult:
+    clean = text.strip()
+    if not clean:
+        return GuardrailResult(allowed=False, reason="Mensagem vazia.")
+    if len(clean) > MAX_INPUT_LENGTH:
+        return GuardrailResult(allowed=False, reason=f"Mensagem muito longa (limite de {MAX_INPUT_LENGTH} caracteres).")
+    if _matches(INJECTION_PATTERNS, clean):
+        return GuardrailResult(allowed=False, reason="Não posso atender a esse pedido: ele tenta alterar minhas regras ou acessar dados restritos.")
+    if _matches(ILLEGAL_PATTERNS, clean):
+        return GuardrailResult(allowed=False, reason="Não posso ajudar com atividades ilegais.")
+    # PII typed by the user never reaches the LLM
+    return GuardrailResult(allowed=True, text=mask_pii(clean))
 
 
-def guardrail_saida(texto: str) -> ResultadoGuardrail:
-    return ResultadoGuardrail(permitido=True, texto=mascarar_pii(texto))
+def output_guardrail(text: str) -> GuardrailResult:
+    return GuardrailResult(allowed=True, text=mask_pii(text))

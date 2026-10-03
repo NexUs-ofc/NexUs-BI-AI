@@ -1,16 +1,16 @@
-"""API do NexUs BI (multiagente).
+"""NexUs BI API (multi-agent).
 
-Rodar na raiz do projeto:
-    uvicorn app.app:app --reload
-Documentação interativa: http://localhost:8000/docs
+Run from the project root:
+    python -m uvicorn app.app:app --reload
+Interactive docs: http://localhost:8000/docs
 """
 from fastapi import FastAPI
 
-from app.config import validar_config
+from app.config import validate_config
 from app.controller import chat_controller
 
-for problema in validar_config():
-    print(f"[config] ATENÇÃO: {problema}")
+for problem in validate_config():
+    print(f"[config] ATENÇÃO: {problem}")
 
 app = FastAPI(
     title="NexUs BI AI",
@@ -23,5 +23,5 @@ app.include_router(chat_controller.router)
 
 @app.get("/health", tags=["infra"])
 def health() -> dict:
-    problemas = validar_config()
-    return {"status": "ok" if not problemas else "atencao", "problemas_de_configuracao": problemas}
+    problems = validate_config()
+    return {"status": "ok" if not problems else "attention", "config_problems": problems}

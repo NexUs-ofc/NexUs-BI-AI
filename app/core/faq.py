@@ -1,16 +1,16 @@
-"""Agente de FAQ: responde dúvidas gerais com base no FAQ indexado no Qdrant."""
-from app.config import FAQ_LIMITE
-from app.core.base import criar_chain
-from app.prompts.faq import FAQ_PROMPT, SEM_FAQ
-from app.repository.faq_repository import buscar_faq
-from app.schemas.agentes import RespostaEspecialista
+"""FAQ agent: answers general questions using the FAQ indexed in Qdrant."""
+from app.config import FAQ_TOP_K
+from app.core.base import build_chain
+from app.prompts.faq import FAQ_PROMPT, NO_FAQ
+from app.repository.faq_repository import search_faq
+from app.schemas.agents import SpecialistAnswer
 
 
-def _formatar(itens: list[dict]) -> str:
-    return "\n\n".join(f"P: {i.get('pergunta', '')}\nR: {i.get('resposta', '')}" for i in itens)
+def _format(items: list[dict]) -> str:
+    return "\n\n".join(f"P: {i.get('question', '')}\nR: {i.get('answer', '')}" for i in items)
 
 
-def agente_faq(usuario: str, historico: list) -> RespostaEspecialista:
-    contexto = _formatar(buscar_faq(usuario, FAQ_LIMITE)) or SEM_FAQ
-    resposta = criar_chain(FAQ_PROMPT).invoke({"usuario": usuario, "historico": historico, "contexto": contexto})
-    return RespostaEspecialista(resposta=resposta, contexto=contexto)
+def faq_agent(question: str, history: list) -> SpecialistAnswer:
+    context = _format(search_faq(question, FAQ_TOP_K)) or NO_FAQ
+    answer = build_chain(FAQ_PROMPT).invoke({"question": question, "history": history, "context": context})
+    return SpecialistAnswer(answer=answer, context=context)

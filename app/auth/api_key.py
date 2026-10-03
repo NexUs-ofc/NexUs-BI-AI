@@ -1,4 +1,4 @@
-"""Proteção das rotas: o cliente precisa mandar a chave da API no header X-API-Key."""
+"""Route protection: the client must send the API key in the X-API-Key header."""
 import secrets
 
 from fastapi import HTTPException, Security, status
@@ -9,20 +9,20 @@ from app.config import API_KEY
 _header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
-def _limpar(valor: str) -> str:
-    """Tira espaços e aspas das pontas (erro comum ao copiar a chave do .env)."""
-    return valor.strip().strip('"').strip("'").strip()
+def _clean(value: str) -> str:
+    """Strip spaces and quotes from the ends (common mistake when copying the key from .env)."""
+    return value.strip().strip('"').strip("'").strip()
 
 
-def verificar_api_key(chave: str | None = Security(_header)) -> None:
-    esperada = _limpar(API_KEY)
-    if not esperada:
-        # Falha fechada: sem chave configurada, ninguém usa a API.
+def verify_api_key(key: str | None = Security(_header)) -> None:
+    expected = _clean(API_KEY)
+    if not expected:
+        # Fail closed: with no key configured, nobody can use the API.
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "API_KEY não configurada no servidor.")
-    if not chave:
+    if not key:
         raise HTTPException(
             status.HTTP_401_UNAUTHORIZED,
             "Header X-API-Key ausente. No /docs, clique em 'Authorize' e informe a chave.",
         )
-    if not secrets.compare_digest(_limpar(chave).encode(), esperada.encode()):
+    if not secrets.compare_digest(_clean(key).encode(), expected.encode()):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Chave de API inválida (diferente da API_KEY do .env).")

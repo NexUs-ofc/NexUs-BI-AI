@@ -1,26 +1,26 @@
 [
   {
-    "pergunta": "O que é o NexUs BI?",
-    "resposta": "O NexUs BI é o assistente inteligente de Business Intelligence da empresa, desenvolvido para analisar dados, gerar relatórios mensais automáticos e responder a dúvidas sobre os indicadores de desempenho (KPIs)."
+    "question": "O que é o NexUs BI?",
+    "answer": "O NexUs BI é o assistente inteligente de Business Intelligence da empresa, desenvolvido para analisar dados, gerar relatórios mensais automáticos e responder a dúvidas sobre os indicadores de desempenho (KPIs)."
   },
   {
-    "pergunta": "Qual é o horário de atendimento do suporte técnico?",
-    "resposta": "O suporte técnico está disponível de segunda a sexta-feira, das 08h00 às 18h00, através do canal oficial de atendimento interno."
+    "question": "Qual é o horário de atendimento do suporte técnico?",
+    "answer": "O suporte técnico está disponível de segunda a sexta-feira, das 08h00 às 18h00, através do canal oficial de atendimento interno."
   },
   {
-    "pergunta": "Com que frequência os relatórios são atualizados?",
-    "resposta": "Os relatórios consolidados são gerados mensalmente no primeiro dia útil de cada mês e ficam disponíveis na plataforma para consulta e download em PDF."
+    "question": "Com que frequência os relatórios são atualizados?",
+    "answer": "Os relatórios consolidados são gerados mensalmente no primeiro dia útil de cada mês e ficam disponíveis na plataforma para consulta e download em PDF."
   },
   {
-    "pergunta": "De onde vêm os dados apresentados no NexUs BI?",
-    "resposta": "Os dados são extraídos diretamente do nosso Data Warehouse e processados através de pipelines automáticos de ETL, garantindo que as métricas reflitam a base oficial e limpa da empresa."
+    "question": "De onde vêm os dados apresentados no NexUs BI?",
+    "answer": "Os dados são extraídos diretamente do nosso Data Warehouse e processados através de pipelines automáticos de ETL, garantindo que as métricas reflitam a base oficial e limpa da empresa."
   },
   {
-    "pergunta": "Como posso solicitar uma análise descritiva de um mês anterior?",
-    "resposta": "Basta perguntar diretamente no chat do NexUs BI especificando o mês e ano desejados (por exemplo: 'Qual foi o faturamento em maio de 2026?'). O assistente consultará o histórico armazenado nos relatórios para te responder."
+    "question": "Como posso solicitar uma análise descritiva de um mês anterior?",
+    "answer": "Basta perguntar diretamente no chat do NexUs BI especificando o mês e ano desejados (por exemplo: 'Qual foi o faturamento em maio de 2026?'). O assistente consultará o histórico armazenado nos relatórios para te responder."
   },
   {
-    "pergunta": "O chatbot toma decisões de negócio de forma automática?",
-    "resposta": "Não. O NexUs BI fornece apenas análises descritivas, métricas e insights informativos. A tomada de decisão final é sempre de responsabilidade das equipes e gestores da empresa."
+    "question": "O chatbot toma decisões de negócio de forma automática?",
+    "answer": "Não. O NexUs BI fornece apenas análises descritivas, métricas e insights informativos. A tomada de decisão final é sempre de responsabilidade das equipes e gestores da empresa."
   }
 ]

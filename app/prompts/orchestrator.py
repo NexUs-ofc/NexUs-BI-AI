@@ -1,0 +1,13 @@
+"""Fixed messages used by the Orchestrator."""
+
+OUT_OF_SCOPE_ANSWER = (
+    "Esse assunto está fora do meu escopo. Posso ajudar com dúvidas gerais sobre o sistema, "
+    "análises descritivas dos dados da empresa e percepções/insights sobre eles."
+)
+
+REJECTED_ANSWER = (
+    "Não consegui gerar uma resposta confiável para essa pergunta com os dados disponíveis. "
+    "Pode reformular ou detalhar um pouco mais?"
+)
+
+JUDGE_REVISION = "{question}\n\n[Revisão interna - corrija a resposta anterior. Problema apontado: {reason}]"

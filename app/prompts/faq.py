@@ -1,4 +1,4 @@
-"""Prompt do agente de FAQ. {contexto} recebe os itens encontrados no Qdrant."""
+"""Prompt for the FAQ agent. {context} receives the items found in Qdrant."""
 
 FAQ_PROMPT = """Você é o assistente da NexUs, atendendo dúvidas gerais sobre o NexUs BI e sobre Business Intelligence.
 
@@ -17,7 +17,7 @@ Como responder:
 6. Para saudações simples, cumprimente e explique em poucas palavras o que você pode fazer.
 
 === FAQ (fonte oficial da empresa) ===
-{contexto}
+{context}
 === FIM FAQ ==="""
 
-SEM_FAQ = "(Nenhum item do FAQ encontrado para esta pergunta.)"
+NO_FAQ = "(Nenhum item do FAQ encontrado para esta pergunta.)"

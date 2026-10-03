@@ -1,33 +1,33 @@
-"""Service de chat: a ponte entre o controller (HTTP) e o Orquestrador (agentes)."""
+"""Chat service: the bridge between the controller (HTTP) and the Orchestrator (agents)."""
 import uuid
 
-from app.core.memory import limpar_sessao, store
-from app.core.orquestrador import Orquestrador
-from app.model.llm import explicar_erro
+from app.core.memory import clear_session, store
+from app.core.orchestrator import Orchestrator
+from app.model.llm import explain_error
 from app.schemas.api import ChatRequest, ChatResponse
 
 
-class ErroLLM(Exception):
-    """Falha ao falar com o modelo (cota, chave, indisponibilidade...)."""
+class LLMError(Exception):
+    """Failure talking to the model (quota, key, unavailability...)."""
 
 
-def responder(requisicao: ChatRequest) -> ChatResponse:
-    session_id = requisicao.session_id or str(uuid.uuid4())
+def answer_question(request: ChatRequest) -> ChatResponse:
+    session_id = request.session_id or str(uuid.uuid4())
     try:
-        resultado = Orquestrador(session_id).processar(requisicao.pergunta)
+        result = Orchestrator(session_id).process(request.question)
     except Exception as e:  # noqa: BLE001
-        raise ErroLLM(explicar_erro(e)) from e
+        raise LLMError(explain_error(e)) from e
 
     return ChatResponse(
         session_id=session_id,
-        resposta=resultado.resposta,
-        rota=resultado.rota,
-        passos=resultado.passos if requisicao.debug else None,
+        answer=result.answer,
+        route=result.route,
+        steps=result.steps if request.debug else None,
     )
 
 
-def encerrar_sessao(session_id: str) -> bool:
-    """Apaga a memória da sessão. Devolve False se ela não existia."""
-    existia = session_id in store
-    limpar_sessao(session_id)
-    return existia
+def end_session(session_id: str) -> bool:
+    """Erase the session memory. Returns False if it did not exist."""
+    existed = session_id in store
+    clear_session(session_id)
+    return existed
