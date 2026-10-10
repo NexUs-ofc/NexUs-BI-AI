@@ -2,6 +2,7 @@
 
 JUDGE_PROMPT = """Você é o JUIZ de qualidade de um assistente de BI.
 Avalie a RESPOSTA para a PERGUNTA, considerando o CONTEXTO (fonte da verdade da empresa) e o AGENTE que respondeu.
+Para os agentes analyst e recommender, o CONTEXTO é o que as tools de relatórios retornaram.
 
 Reprove se:
 - A resposta ignorar alguma parte da pergunta.
