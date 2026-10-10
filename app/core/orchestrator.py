@@ -37,16 +37,16 @@ class Orchestrator:
         # 1) Input guardrail
         guard_in = input_guardrail(message)
         if not guard_in.allowed:
-            steps.append(f"input_guardrail: BLOCKED ({guard_in.reason})")
+            steps.append(f"guardrail de entrada: BLOQUEADO ({guard_in.reason})")
             return Result(answer=guard_in.reason, route="blocked", steps=steps)
         question = guard_in.text
-        steps.append("input_guardrail: ok")
+        steps.append("guardrail de entrada: ok")
 
         history = self.history.messages
 
         # 2) Router
         decision = route(question, history)
-        steps.append(f"router: {decision.route} ({decision.reason})")
+        steps.append(f"roteador: {decision.route} ({decision.reason})")
 
         if decision.route == "out_of_scope":
             answer, approved = OUT_OF_SCOPE_ANSWER, True
@@ -62,8 +62,8 @@ class Orchestrator:
                     steps.append(f"tools: {', '.join(output.tool_calls)}")
                 verdict = judge(question, output.answer, output.context, decision.route)
                 steps.append(
-                    f"judge (attempt {attempt + 1}): approved={verdict.approved} "
-                    f"score={verdict.score} - {verdict.reason}"
+                    f"juiz (tentativa {attempt + 1}): {'aprovado' if verdict.approved else 'reprovado'} "
+                    f"nota={verdict.score} - {verdict.reason}"
                 )
                 if verdict.approved:
                     approved = True
@@ -76,7 +76,7 @@ class Orchestrator:
 
         # 5) Output guardrail
         answer = output_guardrail(answer).text
-        steps.append("output_guardrail: ok")
+        steps.append("guardrail de saída: ok")
 
         # 6) Session memory (sanitized question + final answer)
         self.history.add_user_message(question)
