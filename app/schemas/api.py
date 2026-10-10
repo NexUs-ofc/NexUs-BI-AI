@@ -9,6 +9,11 @@ class ChatRequest(BaseModel):
         description="Identifies the conversation. If empty, the API creates one and returns it.",
         examples=["550e8400-e29b-41d4-a716-446655440000"],
     )
+    company_id: str | None = Field(
+        default=None,
+        description="Company whose reports may be read. If empty, reports of every company are visible.",
+        examples=["1"],
+    )
     debug: bool = Field(default=False, description="If true, returns the internal steps (route, judge, guardrails).")
 
 

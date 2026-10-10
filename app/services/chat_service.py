@@ -14,7 +14,7 @@ class LLMError(Exception):
 def answer_question(request: ChatRequest) -> ChatResponse:
     session_id = request.session_id or str(uuid.uuid4())
     try:
-        result = Orchestrator(session_id).process(request.question)
+        result = Orchestrator(session_id, request.company_id).process(request.question)
     except Exception as e:  # noqa: BLE001
         raise LLMError(explain_error(e)) from e
 
