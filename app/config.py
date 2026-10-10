@@ -25,8 +25,21 @@ EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", "768"))
 FAQ_TOP_K = int(os.getenv("FAQ_TOP_K", "4"))  # how many FAQ items go into the prompt
 FAQ_PATH = ROOT_DIR / os.getenv("FAQ_PATH", "app/static/faq.json")  # ingestion source
 
+# --- MongoDB (consolidated reports)
+MONGODB_URI = os.getenv("MONGODB_URI", "")
+MONGODB_DB = os.getenv("MONGODB_DB", "nexus_bi")
+MONGODB_REPORTS_COLLECTION = os.getenv("MONGODB_REPORTS_COLLECTION", "reports")
+REPORTS_LATEST_LIMIT = int(os.getenv("REPORTS_LATEST_LIMIT", "3"))  # default for "most recent reports"
+REPORTS_MAX_MONTHS = int(os.getenv("REPORTS_MAX_MONTHS", "24"))  # largest period a single search may cover
+REPORTS_MAX_CHARS = int(os.getenv("REPORTS_MAX_CHARS", "15000"))  # cap on what one tool call sends to the LLM
+
 
 def validate_config() -> list[str]:
     """List what is missing in .env (empty list = all good)."""
-    required = {"GOOGLE_API_KEY": GOOGLE_API_KEY, "API_KEY": API_KEY, "QDRANT_URL": QDRANT_URL}
+    required = {
+        "GOOGLE_API_KEY": GOOGLE_API_KEY,
+        "API_KEY": API_KEY,
+        "QDRANT_URL": QDRANT_URL,
+        "MONGODB_URI": MONGODB_URI,
+    }
     return [f"Variável ausente no .env: {name}" for name, value in required.items() if not value]
