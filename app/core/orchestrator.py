@@ -23,8 +23,9 @@ SPECIALISTS = {
 
 
 class Orchestrator:
-    def __init__(self, session_id: str):
+    def __init__(self, session_id: str, company_id: str | None = None):
         self.session_id = session_id
+        self.company_id = company_id  # limits the report tools to this company
 
     @property
     def history(self):
@@ -50,15 +51,15 @@ class Orchestrator:
         if decision.route == "out_of_scope":
             answer, approved = OUT_OF_SCOPE_ANSWER, True
         else:
-            # TODO: once the database tools are defined, fetch the data here and
-            # pass it to analyst_agent / recommender_agent (parameter `data`).
             specialist = SPECIALISTS[decision.route]
 
             # 3) Specialist + 4) Judge (retries if rejected)
             current_input, approved = question, False
             output = SpecialistAnswer(answer="")
             for attempt in range(MAX_JUDGE_RETRIES + 1):
-                output = specialist(current_input, history)
+                output = specialist(current_input, history, company_id=self.company_id)
+                if output.tool_calls:
+                    steps.append(f"tools: {', '.join(output.tool_calls)}")
                 verdict = judge(question, output.answer, output.context, decision.route)
                 steps.append(
                     f"judge (attempt {attempt + 1}): approved={verdict.approved} "

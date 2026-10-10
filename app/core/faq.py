@@ -10,7 +10,7 @@ def _format(items: list[dict]) -> str:
     return "\n\n".join(f"P: {i.get('question', '')}\nR: {i.get('answer', '')}" for i in items)
 
 
-def faq_agent(question: str, history: list) -> SpecialistAnswer:
+def faq_agent(question: str, history: list, company_id: str | None = None) -> SpecialistAnswer:
     context = _format(search_faq(question, FAQ_TOP_K)) or NO_FAQ
     answer = build_chain(FAQ_PROMPT).invoke({"question": question, "history": history, "context": context})
     return SpecialistAnswer(answer=answer, context=context)
