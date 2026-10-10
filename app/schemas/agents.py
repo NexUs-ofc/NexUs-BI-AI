@@ -14,6 +14,7 @@ class RouteDecision(BaseModel):
 class SpecialistAnswer(BaseModel):
     answer: str
     context: str = Field(default="", description="Source of truth used by the specialist (sent to the judge)")
+    tool_calls: list[str] = Field(default_factory=list, description="Tools called by the specialist (for debug)")
 
 
 class Verdict(BaseModel):
