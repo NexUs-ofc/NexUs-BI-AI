@@ -18,7 +18,7 @@ def load_faq_json() -> list[dict]:
     with open(FAQ_PATH, encoding="utf-8") as f:
         data = json.load(f)
     if not isinstance(data, list):
-        raise ValueError("faq.json deve ser uma lista de {question, answer}.")
+        raise TypeError("faq.json deve ser uma lista de {question, answer}.")
     return [i for i in data if i.get("question") and i.get("answer")]
 
 
