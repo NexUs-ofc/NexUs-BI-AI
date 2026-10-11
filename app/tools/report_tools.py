@@ -3,8 +3,8 @@
 - search_reports_by_period: the user named a month, year or date range.
 - get_latest_reports: no period given -> use the most recent reports.
 
-The company is NOT a tool parameter on purpose: it comes from the request context, so the LLM
-can never read another company's reports.
+Business rule of the MVP: the reports are the same for every company, so the tools do not filter by
+company. Authentication (auth/dependencies.py) already guarantees the caller is an active company.
 """
 import json
 
@@ -31,8 +31,8 @@ def _months_between(start_year: int, start_month: int, end_year: int, end_month:
     return (end_year - start_year) * 12 + (end_month - start_month) + 1
 
 
-def build_report_tools(company_id: str | None = None) -> list[StructuredTool]:
-    """Create the report tools bound to one company (or to all, if company_id is None)."""
+def build_report_tools() -> list[StructuredTool]:
+    """Create the report tools used by the Analyst and the Recommender."""
 
     def search_reports_by_period(
         start_month: int, start_year: int, end_month: int | None = None, end_year: int | None = None
@@ -48,7 +48,7 @@ def build_report_tools(company_id: str | None = None) -> list[StructuredTool]:
         if size > REPORTS_MAX_MONTHS:
             return INVALID_PERIOD.format(reason=f"o período tem {size} meses; o máximo é {REPORTS_MAX_MONTHS}.")
 
-        reports = find_reports_by_period(start_year, start_month, end_year, end_month, company_id)
+        reports = find_reports_by_period(start_year, start_month, end_year, end_month)
         if not reports:
             if size == 1:
                 scope = f"{start_month:02d}/{start_year}"
@@ -59,7 +59,7 @@ def build_report_tools(company_id: str | None = None) -> list[StructuredTool]:
 
     def get_latest_reports(limit: int = REPORTS_LATEST_LIMIT) -> str:
         limit = max(1, min(int(limit), 12))
-        reports = find_latest_reports(limit, company_id)
+        reports = find_latest_reports(limit)
         if not reports:
             return NO_REPORTS_FOUND.format(scope="nenhum período (a base de relatórios está vazia)")
         return _to_json(reports)
