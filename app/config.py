@@ -1,11 +1,20 @@
 """General settings loaded from .env."""
 import os
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from dotenv import load_dotenv
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT_DIR / ".env")
+
+# Brasília time (UTC-3, no daylight saving time since 2019). A fixed offset avoids needing the tzdata
+# package on Windows. Used for "today" in the prompts ("mês passado") and for the dollar rate day.
+BRAZIL_TZ = timezone(timedelta(hours=-3), "BRT")
+
+
+def today_in_brazil() -> datetime:
+    return datetime.now(BRAZIL_TZ)
 
 # --- LangSmith (tracing). The SDK reads the tracing flag and the API key straight from the environment
 # (load_dotenv above puts the .env there) and accepts both LANGSMITH_* and LANGCHAIN_* names.

@@ -12,7 +12,7 @@ import urllib.request
 from datetime import date, timedelta
 from functools import lru_cache
 
-from app.config import LLM_MODEL
+from app.config import LLM_MODEL, today_in_brazil
 
 # model -> (input price, output price) in US$ per 1M tokens
 PRICES_USD_PER_1M_TOKENS = {
@@ -55,7 +55,7 @@ def _usd_to_brl_of(today: date) -> tuple[float, str]:
 
 def get_usd_to_brl() -> tuple[float, str]:
     """Current dollar rate in reais and where it came from."""
-    return _usd_to_brl_of(date.today())
+    return _usd_to_brl_of(today_in_brazil().date())
 
 
 def estimate_cost_usd(usage_by_model: dict) -> float:
