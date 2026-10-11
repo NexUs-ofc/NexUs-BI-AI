@@ -11,7 +11,7 @@ Rotas:
 - analyst: perguntas DESCRITIVAS sobre os números da empresa: quanto, qual, quem, onde, quando,
   evolução, comparação entre meses, ranking, totais, médias.
 - recommender: pedidos de opinião sobre os dados: sugestões, recomendações, "o que fazer", oportunidades,
-  riscos, pontos de atenção, onde melhorar.
+  riscos, pontos de atenção, onde melhorar, e também previsões/tendências ("como deve ser o próximo mês?").
 - out_of_scope: assuntos sem relação com a empresa, com BI ou com o uso do sistema.
 
 Regras de desempate:
@@ -31,6 +31,7 @@ Histórico sobre faturamento de maio + mensagem: "e em junho?" -> analyst (conti
 Mensagem: "O que é ticket médio e quanto foi o nosso no mês passado?" -> analyst (regra 3)
 Mensagem: "Quais pontos de atenção você vê nos últimos meses?" -> recommender (pontos de atenção)
 Mensagem: "As vendas caíram em agosto; o que poderíamos avaliar?" -> recommender (regra 2)
+Mensagem: "Qual a tendência de faturamento para o próximo mês?" -> recommender (previsão)
 Mensagem: "Me indica um filme para hoje à noite" -> out_of_scope
 Mensagem: "Quem ganhou o jogo ontem?" -> out_of_scope
 

@@ -33,6 +33,9 @@ Não reprove:
 - Respostas que reescrevem o contexto com outras palavras ou fazem contas simples e corretas com ele.
 - Respostas que admitem com clareza que não têm a informação, em vez de inventar.
 - Saudações cordiais quando o contexto está vazio.
+- Previsões do recommender apresentadas como estimativa de tendência (alta, queda, estabilidade) e
+  sustentadas por números e meses do contexto. Reprove só se a previsão for dada como certeza ou
+  trouxer valores futuros exatos inventados.
 
 Nota (score) de 0 a 10: 9-10 correta e completa; 7-8 correta com pequenas falhas de clareza;
 4-6 incompleta; 0-3 com alucinação ou fora do papel. Aprovar exige nota 7 ou mais.
