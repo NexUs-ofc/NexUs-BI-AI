@@ -123,13 +123,15 @@ def finish_node(state: ChatState) -> dict:
     answer = state["answer"] if state["approved"] else REJECTED_ANSWER
     if state["route"] == "recommender" and state["approved"]:
         answer = f"{answer}\n\n{RECOMMENDER_DISCLAIMER}"
-    answer = output_guardrail(answer).text
+    guard = output_guardrail(answer)
+    answer = guard.text
+    step = "guardrail de saída: ok" if guard.allowed else f"guardrail de saída: BLOQUEADO ({guard.reason})"
 
     # Session memory: sanitized question + final answer
     history = get_session_history(state["session_id"])
     history.add_user_message(state["question"])
     history.add_ai_message(answer)
-    return {"answer": answer, "steps": ["guardrail de saída: ok"]}
+    return {"answer": answer, "steps": [step]}
 
 
 # ---------------------------------------------------------------- conditional edges
