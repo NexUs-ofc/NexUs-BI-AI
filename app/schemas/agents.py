@@ -23,6 +23,13 @@ class Verdict(BaseModel):
     reason: str = Field(description="Justificativa curta; se reprovado, o que corrigir")
 
 
+class JudgeResult(Verdict):
+    """Verdict + what the code collected around it (not filled by the LLM)."""
+
+    tool_calls: list[str] = Field(default_factory=list, description="Tools the judge called")
+    number_check: str = Field(default="", description="Result of the automatic number check")
+
+
 class GuardrailResult(BaseModel):
     allowed: bool
     reason: str = ""
