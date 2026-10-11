@@ -13,13 +13,16 @@
 Each node receives the state, does one job and returns only the fields it changed.
 The decisions (blocked? out of scope? retry?) are conditional edges.
 @traceable sends each node to LangSmith when LANGSMITH_TRACING=true (see config.py).
+@timed measures each node, and process() saves one metric document per question (observability/metrics.py).
 
 Print the graph as a Mermaid diagram (from the project root):
     python -m app.core.orchestrator
 """
 import operator
+import time
 from typing import Annotated, TypedDict
 
+from langchain_core.callbacks import get_usage_metadata_callback
 from langgraph.graph import END, START, StateGraph
 from langsmith import traceable
 
@@ -31,6 +34,7 @@ from app.core.memory import get_session_history
 from app.core.recommender import recommender_agent
 from app.core.router import route
 from app.guardrails.guardrails import input_guardrail, output_guardrail
+from app.observability.metrics import ToolMetricsCallback, new_trace_id, record_question, timed
 from app.core.prompts.orchestrator import JUDGE_REVISION, OUT_OF_SCOPE_ANSWER, REJECTED_ANSWER
 from app.core.prompts.recommender import RECOMMENDER_DISCLAIMER
 from app.schemas.agents import Result
@@ -56,11 +60,13 @@ class ChatState(TypedDict, total=False):
     attempts: int       # how many times the specialist ran
     approved: bool
     steps: Annotated[list[str], operator.add]  # debug trace; each node appends to it
+    timings: Annotated[list[dict], operator.add]  # how long each node took (filled by @timed)
 
 
 # ---------------------------------------------------------------- nodes
 
 @traceable(name="input_guardrail")
+@timed("input_guardrail")
 def input_guardrail_node(state: ChatState) -> dict:
     guard = input_guardrail(state["message"])
     if not guard.allowed:
@@ -75,6 +81,7 @@ def input_guardrail_node(state: ChatState) -> dict:
 
 
 @traceable(name="router")
+@timed("router")
 def router_node(state: ChatState) -> dict:
     decision = route(state["question"], state["history"])
     update = {"route": decision.route, "steps": [f"roteador: {decision.route} ({decision.reason})"]}
@@ -84,6 +91,7 @@ def router_node(state: ChatState) -> dict:
 
 
 @traceable(name="specialist")
+@timed("specialist")
 def specialist_node(state: ChatState) -> dict:
     output = SPECIALISTS[state["route"]](state["current_input"], state["history"])
     steps = [f"tools: {', '.join(output.tool_calls)}"] if output.tool_calls else []
@@ -91,6 +99,7 @@ def specialist_node(state: ChatState) -> dict:
 
 
 @traceable(name="judge")
+@timed("judge")
 def judge_node(state: ChatState) -> dict:
     verdict = judge(state["question"], state["answer"], state["context"], state["route"], state["history"])
     steps = [f"validação de números: {verdict.number_check}"]
@@ -109,6 +118,7 @@ def judge_node(state: ChatState) -> dict:
 
 
 @traceable(name="finish")
+@timed("finish")
 def finish_node(state: ChatState) -> dict:
     answer = state["answer"] if state["approved"] else REJECTED_ANSWER
     if state["route"] == "recommender" and state["approved"]:
@@ -166,12 +176,27 @@ class Orchestrator:
 
     @traceable(name="orchestrator")
     def process(self, message: str) -> Result:
-        state = GRAPH.invoke({
-            "session_id": self.session_id,
-            "message": message,
-            "history": get_session_history(self.session_id).messages,
-            "steps": [],
-        })
+        started, state, error = time.perf_counter(), None, None
+        trace_id = new_trace_id()
+        tools = ToolMetricsCallback(trace_id)  # records every tool call of this question
+        # get_usage_metadata_callback adds up the tokens of every Gemini call made inside the block
+        with get_usage_metadata_callback() as usage:
+            try:
+                state = GRAPH.invoke(
+                    {
+                        "session_id": self.session_id,
+                        "message": message,
+                        "history": get_session_history(self.session_id).messages,
+                        "steps": [],
+                        "timings": [],
+                    },
+                    config={"callbacks": [tools]},
+                )
+            except Exception as e:
+                error = e
+                raise
+            finally:
+                record_question(trace_id, state, started, usage.usage_metadata, tools.tool_calls, error)
         return Result(answer=state["answer"], route=state["route"], steps=state["steps"])
 
 
