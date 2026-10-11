@@ -31,6 +31,10 @@ Exemplos: "qual o horário do suporte?" -> query="horário do suporte";
 "de onde vêm os dados e quando atualizam?" -> query="origem dos dados" e query="frequência de atualização dos relatórios"."""
 
 NO_FAQ = "(A busca no FAQ não encontrou itens para esta consulta.)"
+FAQ_OUTDATED = (
+    "(O FAQ no Qdrant está em um formato antigo, sem os campos question/answer. "
+    "Rode: python -m app.services.faq_service)"
+)
 FAQ_NOT_INDEXED = (
     "(O FAQ não está indexado no Qdrant: a collection não existe ou está vazia. "
     "Rode: python -m app.services.faq_service)"
