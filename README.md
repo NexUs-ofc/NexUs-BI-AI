@@ -6,6 +6,23 @@ POST /chat → controller → service → Orquestrador
    → Juiz (refaz se reprovar) → Guardrail de saída → memória da sessão → resposta
 ```
 
+O orquestrador (`app/core/orchestrator.py`) é um grafo do LangGraph (`StateGraph`). Cada etapa é um nó e
+as decisões são arestas condicionais:
+
+```
+START → input_guardrail ──(bloqueado)──> END
+              │ ok
+            router ──(fora de escopo)──> finish
+              │
+          specialist <──────────────┐ reprovado e ainda há tentativas
+              │                     │
+            judge ──────────────────┘
+              │ aprovado / sem tentativas
+            finish (guardrail de saída + memória) → END
+```
+
+Para gerar o diagrama em Mermaid: `python -m app.core.orchestrator`.
+
 Todos os agentes (roteador, especialistas e juiz) são criados com `create_agent` do LangChain 1.x
 (`app/core/base.py`), que monta o loop ReAct: a LLM decide chamar uma tool, a tool roda e o resultado volta
 para a LLM. Limites por pergunta: 4 chamadas de tool e 8 chamadas ao modelo.
@@ -20,6 +37,27 @@ para a LLM. Limites por pergunta: 4 chamadas de tool e 8 chamadas ao modelo.
 | Orquestrador | `app/core/orchestrator.py` | Coordena o fluxo, reenvia o feedback do Juiz e grava a memória |
 | Juiz | `app/core/judge.py` | LLM-as-a-judge com tools de validação (`check_numbers_against_context`, `search_context`): reprova alucinação, desvio de papel e PII; aprova só com nota ≥ 7 |
 
+## Princípio da inferência
+
+Inferência é quando o sistema **recebe dados novos** e **aplica um conhecimento já aprendido** para gerar
+uma **resposta, previsão ou decisão**. Aqui o conhecimento aprendido é o do modelo pré-treinado (Gemini)
+somado às regras e aos exemplos (few-shot) de cada prompt em `app/core/prompts/`:
+
+| Agente | Dados novos | Conhecimento aplicado | Saída |
+|---|---|---|---|
+| Roteador | mensagem do usuário + histórico | regras e exemplos de classificação | **decisão**: qual agente responde |
+| FAQ | itens do FAQ achados no Qdrant | conceitos de BI + regras do prompt | **resposta** |
+| Analista | relatórios do mês pedido | leitura de KPIs e comparação entre meses | **resposta** descritiva |
+| Recomendador | relatórios de vários meses | conhecimento de negócio sobre tendências | **previsão** da tendência do próximo mês + insights |
+| Juiz | resposta + contexto + validação de números | critérios de qualidade e exemplos | **decisão**: aprovar ou reprovar |
+
+## Observabilidade (LangSmith)
+
+Com `LANGSMITH_TRACING=true` e `LANGSMITH_API_KEY` no `.env` (os nomes antigos `LANGCHAIN_TRACING_V2` e
+`LANGCHAIN_API_KEY`, usados no NexUs-AI, também funcionam), cada mensagem aparece no LangSmith
+(projeto `ceris-ms-ia-bi`) como uma árvore: `orchestrator` → nós do grafo (`@traceable`) → agentes, chamadas
+ao Gemini e tools. Com `LANGSMITH_TRACING=false`, nada é enviado.
+
 ## Estrutura
 
 ```
@@ -33,8 +71,8 @@ app/
   controller/chat_controller.py # endpoints: só chamam os services
   services/chat_service.py      # ponte entre a API e o Orquestrador
   services/faq_service.py       # ingestão do FAQ no Qdrant
-  core/                         # agentes, orquestrador e memória da sessão
-  prompts/                      # um arquivo de prompt por agente
+  core/                         # agentes, orquestrador (grafo) e memória da sessão
+  core/prompts/                 # um arquivo de prompt por agente + descrições das tools
   guardrails/guardrails.py
   model/llm.py                  # fábrica da LLM (Gemini)
   model/embeddings.py           # embeddings do FAQ
@@ -45,7 +83,7 @@ app/
   tools/report_tools.py         # tools de relatórios usadas pelo analista e pelo recomendador
   tools/faq_tools.py            # tool search_faq (FAQ retriever)
   tools/judge_tools.py          # tools de validação do juiz (sem LLM)
-  observability/                # ainda não implementado
+  observability/                # vazia: a observabilidade é feita pelo LangSmith
 ```
 
 Memória: `app/core/memory.py`, apenas em RAM e por sessão (`session_id`). Reiniciar o servidor apaga tudo.
