@@ -1,25 +1,13 @@
-"""Router agent: decides which specialist handles the question."""
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from pydantic import ValidationError
-
-from app.model.llm import get_llm
+"""Router agent: decides which specialist handles the question (create_agent with structured output)."""
+from app.core.base import build_agent, run_agent, structured_output
 from app.prompts.router import ROUTER_PROMPT
 from app.schemas.agents import RouteDecision
 
-prompt = ChatPromptTemplate.from_messages([
-    ("system", ROUTER_PROMPT),
-    MessagesPlaceholder("history"),
-    ("human", "{question}"),
-])
+FALLBACK = RouteDecision(route="faq", reason="fallback: saída do roteador fora do formato")
 
 
 def route(question: str, history: list) -> RouteDecision:
-    chain = prompt | get_llm(temperature=0).with_structured_output(RouteDecision)
-    try:
-        decision = chain.invoke({"question": question, "history": history})
-    except ValidationError:
-        decision = None
+    agent = build_agent(ROUTER_PROMPT, response_format=RouteDecision, temperature=0)
     # API errors (quota, key, network) bubble up so the caller can show the real message.
-    if decision is None:  # the LLM answered outside the expected format
-        return RouteDecision(route="faq", reason="fallback: saída do roteador fora do formato")
-    return decision
+    state = run_agent(agent, question, history)
+    return structured_output(state) or FALLBACK
