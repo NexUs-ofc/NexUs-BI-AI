@@ -4,7 +4,12 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.auth.dependencies import get_current_user
-from app.schemas.api import ChatRequest, ChatResponse, CurrentUser, SessionClosedResponse
+from app.schemas.api import (
+    ChatRequest,
+    ChatResponse,
+    CurrentUser,
+    SessionClosedResponse,
+)
 from app.services import chat_service
 
 router = APIRouter(prefix="/chat", tags=["chat"])

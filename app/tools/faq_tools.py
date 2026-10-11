@@ -2,7 +2,12 @@
 from langchain_core.tools import StructuredTool
 
 from app.config import FAQ_TOP_K
-from app.core.prompts.tools import FAQ_NOT_INDEXED, FAQ_OUTDATED, NO_FAQ, SEARCH_FAQ_DESCRIPTION
+from app.core.prompts.tools import (
+    FAQ_NOT_INDEXED,
+    FAQ_OUTDATED,
+    NO_FAQ,
+    SEARCH_FAQ_DESCRIPTION,
+)
 from app.repository.faq_repository import count_faq_items, search_faq
 
 
