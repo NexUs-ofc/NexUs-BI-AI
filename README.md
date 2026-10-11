@@ -1,185 +1,106 @@
-# NexUs BI AI — assistente multiagente (API)
+# NexUs BI AI
 
-```
-POST /chat → controller → service → Orquestrador
-   Guardrail de entrada → Roteador → [FAQ (Qdrant) | Analista descritivo | Recomendador | fora de escopo]
-   → Juiz (refaz se reprovar) → Guardrail de saída → memória da sessão → resposta
-```
+Assistente multiagente de Business Intelligence (API FastAPI). A empresa pergunta em português e o
+sistema responde sobre o NexUs BI ou sobre os relatórios mensais, com um juiz conferindo cada resposta.
 
-O orquestrador (`app/core/orchestrator.py`) é um grafo do LangGraph (`StateGraph`). Cada etapa é um nó e
-as decisões são arestas condicionais:
-
-```
-START → input_guardrail ──(bloqueado)──> END
-              │ ok
-            router ──(fora de escopo)──> finish
-              │
-          specialist <──────────────┐ reprovado e ainda há tentativas
-              │                     │
-            judge ──────────────────┘
-              │ aprovado / sem tentativas
-            finish (guardrail de saída + memória) → END
-```
-
-Para gerar o diagrama em Mermaid: `python -m app.core.orchestrator`.
-
-Todos os agentes (roteador, especialistas e juiz) são criados com `create_agent` do LangChain 1.x
-(`app/core/base.py`), que monta o loop ReAct: a LLM decide chamar uma tool, a tool roda e o resultado volta
-para a LLM. Limites por pergunta: 4 chamadas de tool e 8 chamadas ao modelo.
-
-| Agente | Arquivo | Papel |
-|---|---|---|
-| Guardrails | `app/guardrails/guardrails.py` | Regras fixas (regex): bloqueia injeção de prompt e pedidos ilegais; mascara CPF/CNPJ/cartão/e-mail/telefone na entrada e na saída |
-| Roteador | `app/core/router.py` | `create_agent` com saída estruturada (`RouteDecision`) que escolhe `faq`, `analyst`, `recommender` ou `out_of_scope` |
-| FAQ | `app/core/faq.py` | Consulta o FAQ no Qdrant pela tool `search_faq` e responde com base nele |
-| Analista descritivo | `app/core/analyst.py` | Descreve os dados lendo os relatórios consolidados do MongoDB (tools de relatórios) |
-| Recomendador | `app/core/recommender.py` | Percepções e insights a partir dos relatórios; deixa explícito que não toma decisões |
-| Orquestrador | `app/core/orchestrator.py` | Coordena o fluxo, reenvia o feedback do Juiz e grava a memória |
-| Juiz | `app/core/judge.py` | LLM-as-a-judge com tools de validação (`check_numbers_against_context`, `search_context`): reprova alucinação, desvio de papel e PII; aprova só com nota ≥ 7 |
-
-## Princípio da inferência
-
-Inferência é quando o sistema **recebe dados novos** e **aplica um conhecimento já aprendido** para gerar
-uma **resposta, previsão ou decisão**. Aqui o conhecimento aprendido é o do modelo pré-treinado (Gemini)
-somado às regras e aos exemplos (few-shot) de cada prompt em `app/core/prompts/`:
-
-| Agente | Dados novos | Conhecimento aplicado | Saída |
-|---|---|---|---|
-| Roteador | mensagem do usuário + histórico | regras e exemplos de classificação | **decisão**: qual agente responde |
-| FAQ | itens do FAQ achados no Qdrant | conceitos de BI + regras do prompt | **resposta** |
-| Analista | relatórios do mês pedido | leitura de KPIs e comparação entre meses | **resposta** descritiva |
-| Recomendador | relatórios de vários meses | conhecimento de negócio sobre tendências | **previsão** da tendência do próximo mês + insights |
-| Juiz | resposta + contexto + validação de números | critérios de qualidade e exemplos | **decisão**: aprovar ou reprovar |
-
-## Observabilidade (LangSmith)
-
-Com `LANGSMITH_TRACING=true` e `LANGSMITH_API_KEY` no `.env` (os nomes antigos `LANGCHAIN_TRACING_V2` e
-`LANGCHAIN_API_KEY`, usados no NexUs-AI, também funcionam), cada mensagem aparece no LangSmith
-(projeto `ceris-ms-ia-bi`) como uma árvore: `orchestrator` → nós do grafo (`@traceable`) → agentes, chamadas
-ao Gemini e tools. Com `LANGSMITH_TRACING=false`, nada é enviado.
-
-## Métricas (custo, latência, erros, ROI)
-
-O NexUs BI (web) grava as métricas em coleções próprias no `db_ceris`, separadas das do NexUs-AI (mobile)
-(`app/observability/metrics.py`). As duas compartilham o `trace_id` da pergunta:
-
-- `metrics_bi`: um documento por pergunta, com rota, se foi resolvida (o juiz aprovou a resposta de um
-  especialista), bloqueada ou reprovada, erro, tempo total e de cada nó do grafo, nº de tools, tokens do
-  Gemini e custo estimado (`app/observability/cost.py`, preços de 10/2026).
-- `tool_metrics_bi`: um documento por chamada de tool (`trace_id`, `tool_name`, `started_at`, `finished_at`,
-  `duration_ms`, `success`), no mesmo formato da `tool_metrics` do NexUs-AI.
-
-`GET /metrics/report` (header `X-API-Key`) calcula, para os últimos `days` dias:
-
-| Métrica | Como é calculada |
-|---|---|
-| Custo para 100 e 1000 usuários/semana | custo médio por pergunta × usuários × `questions_per_user_week` (padrão 10) |
-| Latência interagentes e total | média e p95 de cada nó (`input_guardrail`, `router`, `specialist`, `judge`, `finish`) e do total |
-| Índice de erros | perguntas que terminaram em exceção ÷ total (reprovações do juiz e bloqueios aparecem separados) |
-| Custo por resolução | custo total ÷ perguntas resolvidas |
-| ROI | (economia − custo) ÷ custo; economia = resolvidas × `minutes_saved_per_resolution` (padrão 10) × `analyst_hour_brl` (padrão R$ 50) |
-
-O dólar vem da PTAX do Banco Central (cotação oficial do dia, consultada no máximo uma vez por dia); se a
-API estiver fora do ar, usa um valor fixo. O campo `usd_to_brl_source` do relatório mostra qual foi usado.
-
-As premissas podem ser trocadas na própria URL, por exemplo `/metrics/report?days=30&analyst_hour_brl=80`.
-
-## Estrutura
-
-```
-app/
-  app.py                        # cria a API FastAPI e registra os controllers
-  config.py                     # variáveis do .env
-  auth/api_key.py               # header X-API-Key (aplicação cliente)
-  auth/jwt_handler.py           # validação do JWT emitido pelo NexUs-Auth
-  auth/dependencies.py          # get_current_user: X-API-Key + JWT + empresa ativa no Postgres
-  repository/company_repository.py # consulta a empresa no PostgreSQL do Auth
-  controller/chat_controller.py # endpoints: só chamam os services
-  services/chat_service.py      # ponte entre a API e o Orquestrador
-  services/faq_service.py       # ingestão do FAQ no Qdrant
-  core/                         # agentes, orquestrador (grafo) e memória da sessão
-  core/prompts/                 # um arquivo de prompt por agente + descrições das tools
-  guardrails/guardrails.py
-  model/llm.py                  # fábrica da LLM (Gemini)
-  model/embeddings.py           # embeddings do FAQ
-  repository/faq_repository.py  # acesso ao Qdrant
-  repository/report_repository.py # leitura dos relatórios no MongoDB
-  schemas/                      # agents.py (entre agentes) e api.py (contratos HTTP)
-  static/faq.json               # FAQ de origem para a ingestão (vazio)
-  tools/report_tools.py         # tools de relatórios usadas pelo analista e pelo recomendador
-  tools/faq_tools.py            # tool search_faq (FAQ retriever)
-  tools/judge_tools.py          # tools de validação do juiz (sem LLM)
-  observability/cost.py         # preço do Gemini e cotação do dólar
-  observability/metrics.py      # mede cada nó e cada tool e grava as métricas
-  repository/metrics_repository.py # coleções metrics_bi e tool_metrics_bi no MongoDB
-  services/metrics_service.py   # relatório: cenários, latência, erros, custo por resolução, ROI
-  controller/metrics_controller.py # GET /metrics/report
-```
-
-Memória: `app/core/memory.py`, apenas em RAM e por sessão (`session_id`). Reiniciar o servidor apaga tudo.
+**Stack:** Python · FastAPI · LangChain 1.x (`create_agent`) · LangGraph · Gemini · Qdrant · MongoDB · PostgreSQL · LangSmith
 
 ## Como rodar
 
 ```bash
 pip install -r requirements.txt
-cp .env.example .env                 # preencha GOOGLE_API_KEY, API_KEY e QDRANT_URL
-python -m app.services.faq_service   # indexa o app/static/faq.json no Qdrant
-python -m uvicorn app.app:app --reload  # docs em http://localhost:8000/docs
+cp .env.example .env                    # preencha as variáveis (veja o próprio arquivo)
+python -m app.services.faq_service      # carrega o app/static/faq.json no Qdrant
+python -m uvicorn app.app:app --reload  # documentação em http://localhost:8000/docs
 ```
 
-Teste rápido da chave/modelo do Gemini: `python -m app.model.llm`.
+Testes rápidos: `python -m app.model.llm` (chave do Gemini) e `python -m app.core.orchestrator` (desenha o grafo).
 
-## Endpoints
+## Como chamar a API
 
-Todos em `/chat` exigem dois headers (mesmo esquema do NexUs-AI):
-- `X-API-Key`: valor de `API_KEY` do `.env`;
-- `Authorization: Bearer <token>`: access token que o NexUs-Auth devolve no login do site (`channel: PLATFORM`).
-  É validado aqui com `JWT_SECRET_BASE64` (mesmo segredo do Auth): assinatura, validade e emissor `nexus-auth`.
+As rotas `/chat` exigem dois headers (mesmo esquema do NexUs-AI):
 
-Regra do MVP: o relatório é o mesmo para todas as empresas. A autenticação só garante que quem pergunta é
-uma empresa real: o token precisa ser de um perfil `COMPANY` e a empresa precisa existir e estar `ACTIVE` no
-PostgreSQL do Auth (`PGSQL_URL`, tabelas `profile` e `company`). Outros perfis (ADMIN, HOUSEHOLD) recebem 403.
-O CORS está liberado para o site chamar a API pelo navegador.
+| Header | O que é |
+|---|---|
+| `X-API-Key` | chave da aplicação (`API_KEY` do `.env`) |
+| `Authorization: Bearer <token>` | token do login no site, emitido pelo NexUs-Auth |
 
-Para testar sem fazer login no site, gere um token de desenvolvimento com o id de um perfil de empresa
-ativo no banco do Auth: `python -m app.auth.jwt_handler <profile_id>`.
-No `/docs`, clique em **Authorize** e preencha os dois campos.
+O token precisa ser de um perfil **COMPANY** com empresa **ACTIVE** no PostgreSQL do Auth; outros perfis
+recebem 403. Para testar sem o site: `python -m app.auth.jwt_handler <profile_id>` gera um token.
 
-| Método | Rota | O que faz |
+| Rota | O que faz |
+|---|---|
+| `POST /chat` | `{"question", "session_id"?, "debug"?}` → `{"session_id", "answer", "route", "steps"}` |
+| `DELETE /chat/{session_id}` | apaga a memória da sessão |
+| `GET /metrics/report` | custo, latência, erros e ROI (só `X-API-Key`) |
+| `GET /health` | status e variáveis faltando (sem autenticação) |
+
+Para continuar uma conversa, reenvie o `session_id`. Com `"debug": true` a resposta mostra o passo a passo.
+
+## Como funciona
+
+O orquestrador é um **grafo do LangGraph**: cada etapa é um nó e as decisões são arestas.
+
+```
+input_guardrail ──bloqueado──> fim
+       │
+     router ──fora de escopo──> finish
+       │
+   specialist <───┐ reprovado (refaz 1x)
+       │          │
+     judge ───────┘
+       │ aprovado
+     finish (guardrail de saída + memória) ──> fim
+```
+
+| Agente | Papel | Ferramentas |
 |---|---|---|
-| POST | `/chat` | Recebe `{"question": "...", "session_id": "opcional", "debug": false}` e devolve `{"session_id", "answer", "route", "steps"}` |
-| DELETE | `/chat/{session_id}` | Apaga a memória da sessão (da empresa do token) |
-| GET | `/health` | Status e variáveis faltando (sem autenticação) |
+| Guardrails | bloqueiam injeção de prompt, perguntas sobre o sistema e pedidos ilegais; mascaram CPF, e-mail etc. | regras fixas (sem LLM) |
+| Roteador | escolhe `faq`, `analyst`, `recommender` ou `out_of_scope` | saída estruturada |
+| FAQ | dúvidas sobre o NexUs BI e conceitos de BI | `search_faq` (Qdrant) |
+| Analista | descreve os números dos relatórios | `search_reports_by_period`, `get_latest_reports` |
+| Recomendador | insights e **previsão** de tendência; nunca decide | mesmas do analista |
+| Juiz | reprova alucinação, desvio de papel e partes ignoradas | checagem automática de números + `search_context` |
 
-```bash
-curl -X POST http://localhost:8000/chat -H "X-API-Key: SUA_CHAVE" -H "Authorization: Bearer SEU_TOKEN" \
-     -H "Content-Type: application/json" \
-     -d '{"question": "oi", "debug": true}'
+Os prompts ficam em `app/core/prompts/`, um arquivo por agente, com regras e exemplos (few-shot).
+
+**Princípio da inferência:** cada agente recebe **dados novos** (pergunta, relatórios, FAQ) e aplica o
+**conhecimento aprendido** (o modelo pré-treinado + regras e exemplos do prompt) para gerar uma **resposta**
+(FAQ, analista), uma **previsão** (recomendador) ou uma **decisão** (roteador, juiz).
+
+## Dados
+
+| Fonte | Uso |
+|---|---|
+| Qdrant | FAQ (`app/static/faq.json`); rode o `faq_service` sempre que editar o JSON |
+| MongoDB `db_ceris` | relatórios mensais (um por mês, igual para todas as empresas; campos obrigatórios `mes` e `ano`) e métricas |
+| PostgreSQL do Auth | confere se a empresa do token existe e está ativa |
+| Memória | só em RAM, por empresa + sessão; reiniciar o servidor apaga |
+
+## Observabilidade
+
+- **LangSmith:** com `LANGSMITH_TRACING=true`, cada pergunta vira uma árvore no projeto `ceris-ms-ia-bi`
+  (orquestrador → nós do grafo com `@traceable` → agentes, Gemini e tools).
+- **MongoDB:** coleções próprias do web, separadas das do mobile e ligadas pelo `trace_id`:
+  `metrics_bi` (uma por pergunta) e `tool_metrics_bi` (uma por chamada de tool).
+- **`GET /metrics/report`:** custo para 100 e 1000 usuários/semana, latência de cada agente e total, índice de
+  erros, custo por resolução e ROI. O dólar vem da PTAX do Banco Central. As premissas mudam pela URL, ex.:
+  `/metrics/report?days=30&analyst_hour_brl=80`.
+
+## Estrutura
+
 ```
-
-Para manter a conversa, reenvie o `session_id` devolvido na primeira resposta. A memória fica só em RAM
-e é separada por empresa + sessão: outra sessão (ou outra empresa com o mesmo id) começa sem histórico.
-
-## FAQ
-
-Edite `app/static/faq.json` e rode `python -m app.services.faq_service` (recria a collection):
-
-```json
-[
-  {"question": "O que é o NexUs BI?", "answer": "..."}
-]
+app/
+  app.py, config.py   API e variáveis do .env
+  controller/         rotas (só chamam os services)
+  services/           chat, FAQ (ingestão) e relatório de métricas
+  core/               agentes, grafo do orquestrador e memória
+  core/prompts/       prompts e descrições das tools
+  tools/              tools dos agentes (relatórios, FAQ, juiz)
+  guardrails/         regras de entrada e saída
+  auth/               X-API-Key e JWT
+  repository/         Qdrant, MongoDB e PostgreSQL
+  observability/      custo e métricas
+  model/              LLM e embeddings (Gemini)
+  schemas/            contratos da API e entre agentes
 ```
-
-## Relatórios (Analista e Recomendador)
-
-Os dois agentes leem os relatórios consolidados mensais já salvos no MongoDB, por duas tools
-(`app/tools/report_tools.py`), escolhidas pela própria LLM:
-
-| Tool | Quando é usada | Parâmetros |
-|---|---|---|
-| `search_reports_by_period` | O usuário citou mês, ano ou período ("maio de 2026", "1º trimestre", "mês passado") | `start_month`, `start_year`, `end_month` e `end_year` (opcionais, para intervalos) |
-| `get_latest_reports` | O usuário não citou período | `limit` (padrão `REPORTS_LATEST_LIMIT`) |
-
-- Existe um relatório por mês, o mesmo para todas as empresas (as tools não filtram por empresa).
-- Cada documento da collection precisa ter os campos `mes` e `ano`; o resto do relatório é livre. Banco e collection ficam no `.env` (`MONGODB_*`). Mês e ano podem estar gravados como número ou como texto.
-- O que as tools retornam vira o contexto do Juiz, que reprova números que não estejam nos relatórios.
