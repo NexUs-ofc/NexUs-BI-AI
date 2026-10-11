@@ -1,16 +1,13 @@
-"""FAQ agent: answers general questions using the FAQ indexed in Qdrant."""
-from app.config import FAQ_TOP_K
-from app.core.base import build_chain
-from app.prompts.faq import FAQ_PROMPT, NO_FAQ
-from app.repository.faq_repository import search_faq
+"""FAQ agent: answers general questions, searching the FAQ (Qdrant) through the search_faq tool."""
+from app.core.base import build_agent, final_text, run_agent, tool_trace
+from app.prompts.faq import FAQ_PROMPT
+from app.prompts.tools import FAQ_NOT_SEARCHED
 from app.schemas.agents import SpecialistAnswer
+from app.tools.faq_tools import build_faq_tools
 
 
-def _format(items: list[dict]) -> str:
-    return "\n\n".join(f"P: {i.get('question', '')}\nR: {i.get('answer', '')}" for i in items)
-
-
-def faq_agent(question: str, history: list, company_id: str | None = None) -> SpecialistAnswer:
-    context = _format(search_faq(question, FAQ_TOP_K)) or NO_FAQ
-    answer = build_chain(FAQ_PROMPT).invoke({"question": question, "history": history, "context": context})
-    return SpecialistAnswer(answer=answer, context=context)
+def faq_agent(question: str, history: list) -> SpecialistAnswer:
+    tools = build_faq_tools()
+    state = run_agent(build_agent(FAQ_PROMPT, tools), question, history)
+    calls, log = tool_trace(state, tools)
+    return SpecialistAnswer(answer=final_text(state), context="\n\n".join(log) or FAQ_NOT_SEARCHED, tool_calls=calls)
