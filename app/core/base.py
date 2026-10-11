@@ -15,6 +15,7 @@ from langchain_core.tools import BaseTool
 
 from app.model.llm import get_llm
 from app.core.prompts.orchestrator import LIMIT_REACHED_ANSWER
+from app.core.prompts.security import SECURITY_RULES
 
 MAX_TOOL_CALLS = 4  # tool calls allowed per question; after that the agent must answer with what it has
 MAX_MODEL_CALLS = 8  # LLM calls allowed per question; protects against loops (and API cost)
@@ -25,11 +26,12 @@ def build_agent(system_prompt: str, tools: list[BaseTool] | None = None, respons
 
     response_format: a pydantic class when the answer must follow a schema (router and judge).
     ToolStrategy delivers the schema as a tool, which works together with the agent's other tools on Gemini.
+    SECURITY_RULES are appended to every prompt so no agent reveals its instructions or internals.
     """
     return create_agent(
         model=get_llm(temperature),
         tools=tools or [],
-        system_prompt=system_prompt,
+        system_prompt=f"{system_prompt}\n\n{SECURITY_RULES}",
         response_format=ToolStrategy(response_format) if response_format else None,
         middleware=[
             ModelCallLimitMiddleware(run_limit=MAX_MODEL_CALLS, exit_behavior="end"),
