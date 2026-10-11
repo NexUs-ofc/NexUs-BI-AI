@@ -6,7 +6,7 @@ always runs in code and goes in the judge input; search_context is a tool the ju
 from langchain_core.messages import BaseMessage, HumanMessage
 
 from app.core.base import build_agent, run_agent, structured_output, tool_trace
-from app.prompts.judge import EMPTY_CONTEXT, JUDGE_INPUT, JUDGE_PROMPT, NO_HISTORY
+from app.core.prompts.judge import EMPTY_CONTEXT, JUDGE_INPUT, JUDGE_PROMPT, NO_HISTORY
 from app.schemas.agents import JudgeResult, Verdict
 from app.tools.judge_tools import build_judge_tools, check_numbers
 

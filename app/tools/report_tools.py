@@ -11,7 +11,7 @@ import json
 from langchain_core.tools import StructuredTool
 
 from app.config import REPORTS_LATEST_LIMIT, REPORTS_MAX_CHARS, REPORTS_MAX_MONTHS
-from app.prompts.tools import (
+from app.core.prompts.tools import (
     GET_LATEST_REPORTS_DESCRIPTION,
     INVALID_PERIOD,
     NO_REPORTS_FOUND,

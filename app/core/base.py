@@ -14,7 +14,7 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.tools import BaseTool
 
 from app.model.llm import get_llm
-from app.prompts.orchestrator import LIMIT_REACHED_ANSWER
+from app.core.prompts.orchestrator import LIMIT_REACHED_ANSWER
 
 MAX_TOOL_CALLS = 4  # tool calls allowed per question; after that the agent must answer with what it has
 MAX_MODEL_CALLS = 8  # LLM calls allowed per question; protects against loops (and API cost)

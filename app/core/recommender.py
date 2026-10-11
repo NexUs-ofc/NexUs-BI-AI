@@ -3,8 +3,8 @@ It does NOT make decisions."""
 from datetime import date
 
 from app.core.base import build_agent, final_text, run_agent, tool_trace
-from app.prompts.recommender import RECOMMENDER_PROMPT
-from app.prompts.tools import NO_TOOL_CALLED
+from app.core.prompts.recommender import RECOMMENDER_PROMPT
+from app.core.prompts.tools import NO_TOOL_CALLED
 from app.schemas.agents import SpecialistAnswer
 from app.tools.report_tools import build_report_tools
 

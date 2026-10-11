@@ -1,6 +1,6 @@
 """Router agent: decides which specialist handles the question (create_agent with structured output)."""
 from app.core.base import build_agent, run_agent, structured_output
-from app.prompts.router import ROUTER_PROMPT
+from app.core.prompts.router import ROUTER_PROMPT
 from app.schemas.agents import RouteDecision
 
 FALLBACK = RouteDecision(route="faq", reason="fallback: saída do roteador fora do formato")
