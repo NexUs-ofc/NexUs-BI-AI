@@ -10,8 +10,9 @@ import re
 import unicodedata
 
 from langchain_core.tools import StructuredTool
+from langsmith import traceable
 
-from app.prompts.tools import (
+from app.core.prompts.tools import (
     ALL_NUMBERS_FOUND,
     NO_NUMBERS,
     NUMBERS_NOT_FOUND,
@@ -54,6 +55,7 @@ def _format(number: float) -> str:
     return str(int(number)) if number.is_integer() else str(number)
 
 
+@traceable(name="check_numbers")
 def check_numbers(answer: str, context: str) -> str:
     """List the relevant numbers of the answer that are not in the context."""
     context_numbers = extract_numbers(context)
