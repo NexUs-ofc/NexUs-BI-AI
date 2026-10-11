@@ -1,4 +1,6 @@
 langchain>=1.0
+langgraph>=1.0
+langsmith>=0.3
 langchain-core>=1.0
 langchain-google-genai>=3.0
 fastapi>=0.110

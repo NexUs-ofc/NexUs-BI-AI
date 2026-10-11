@@ -7,6 +7,11 @@ from dotenv import load_dotenv
 ROOT_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT_DIR / ".env")
 
+# --- LangSmith (tracing). The SDK reads the tracing flag and the API key straight from the environment
+# (load_dotenv above puts the .env there) and accepts both LANGSMITH_* and LANGCHAIN_* names.
+# The project name is a constant, following the NexUs-AI convention (ceris-ms-ia).
+os.environ.setdefault("LANGSMITH_PROJECT", "ceris-ms-ia-bi")
+
 # --- LLM
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
 LLM_MODEL = os.getenv("LLM_MODEL", "gemini-2.5-flash")
