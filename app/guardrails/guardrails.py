@@ -28,14 +28,18 @@ INTERNALS_PATTERNS = [
     r"\b(variaveis de ambiente|string de conexao|connection string|credenciais?|api ?-?key|chave (de|da) api|token)\b",
     r"\.env\b",
     r"\bsenha (do|de|da) (admin|administrador|banco|sistema|servidor)\b",
-    r"\b(arquitetura|estrutura|stack|tecnologias?|infraestrutura|configuracao|implementacao)\b.{0,30}"
-    r"\b(sistema|servidor|api|assistente|chatbot|bot|ia|agentes?)\b",
+    (
+        r"\b(arquitetura|estrutura|stack|tecnologias?|infraestrutura|configuracao|implementacao)\b.{0,30}"
+        r"\b(sistema|servidor|api|assistente|chatbot|bot|ia|agentes?)\b"
+    ),
     r"\b(qual|quais|que)\b.{0,20}\b(modelo|llm|banco de dados)\b.{0,25}\b(voce|usa|utiliza|roda)\b",
     r"\bcomo (voce )?(foi|e|esta) (feito|construido|programado|implementado)\b",
     # attempts to make the assistant repeat or reveal its instructions (prompt leak)
     r"\b(repita|repete|reproduza|copie|imprima)\b.{0,60}\b(acima|anterior|anteriores|antes|inicial|instrucoes|prompt)\b",
-    r"\b(quais|qual|que|mostre|mostra|liste|diga|revele|conte)\b.{0,30}\b(instrucoes|regras|orientacoes|diretrizes)\b"
-    r".{0,30}\b(voce|recebeu|te deram|internas|seguir)\b",
+    (
+        r"\b(quais|qual|que|mostre|mostra|liste|diga|revele|conte)\b.{0,30}\b(instrucoes|regras|orientacoes|diretrizes)\b"
+        r".{0,30}\b(voce|recebeu|te deram|internas|seguir)\b"
+    ),
     # the same in English
     r"\b(repeat|print|show|reveal|tell me|what are)\b.{0,40}\b(instructions|rules|prompt|guidelines|text above|previous)\b",
     r"\b(architecture|infrastructure|tech stack|source code)\b",
