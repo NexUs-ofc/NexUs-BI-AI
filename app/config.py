@@ -13,8 +13,11 @@ LLM_MODEL = os.getenv("LLM_MODEL", "gemini-2.5-flash")
 LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.2"))
 MAX_JUDGE_RETRIES = int(os.getenv("MAX_JUDGE_RETRIES", "1"))
 
-# --- API
+# --- API and authentication (same scheme as NexUs-AI: X-API-Key + Bearer JWT issued by the Auth service)
 API_KEY = os.getenv("API_KEY", "")  # key required in the X-API-Key header
+JWT_SECRET = os.getenv("JWT_SECRET_BASE64", "")  # same name and value as in the Auth service (Base64)
+JWT_ALGORITHM = "HS256"
+JWT_ISSUER = "nexus-auth"  # value of the "iss" claim written by the Auth service
 
 # --- Qdrant (FAQ)
 QDRANT_URL = os.getenv("QDRANT_URL", "")  # use ":memory:" to test without a server
@@ -24,6 +27,9 @@ EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "gemini-embedding-001")
 EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", "768"))
 FAQ_TOP_K = int(os.getenv("FAQ_TOP_K", "4"))  # how many FAQ items go into the prompt
 FAQ_PATH = ROOT_DIR / os.getenv("FAQ_PATH", "app/static/faq.json")  # ingestion source
+
+# --- PostgreSQL of the Auth service (only to check that the logged-in company exists and is active)
+PGSQL_URL = os.getenv("PGSQL_URL", "")  # postgresql://user:password@host:5432/database
 
 # --- MongoDB (consolidated reports)
 MONGODB_URI = os.getenv("MONGODB_URI", "")
@@ -39,7 +45,9 @@ def validate_config() -> list[str]:
     required = {
         "GOOGLE_API_KEY": GOOGLE_API_KEY,
         "API_KEY": API_KEY,
+        "JWT_SECRET_BASE64": JWT_SECRET,
         "QDRANT_URL": QDRANT_URL,
         "MONGODB_URI": MONGODB_URI,
+        "PGSQL_URL": PGSQL_URL,
     }
     return [f"Variável ausente no .env: {name}" for name, value in required.items() if not value]
