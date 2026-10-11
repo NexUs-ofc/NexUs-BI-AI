@@ -32,7 +32,30 @@ INTERNALS_PATTERNS = [
     r"\b(sistema|servidor|api|assistente|chatbot|bot|ia|agentes?)\b",
     r"\b(qual|quais|que)\b.{0,20}\b(modelo|llm|banco de dados)\b.{0,25}\b(voce|usa|utiliza|roda)\b",
     r"\bcomo (voce )?(foi|e|esta) (feito|construido|programado|implementado)\b",
+    # attempts to make the assistant repeat or reveal its instructions (prompt leak)
+    r"\b(repita|repete|reproduza|copie|imprima)\b.{0,60}\b(acima|anterior|anteriores|antes|inicial|instrucoes|prompt)\b",
+    r"\b(quais|qual|que|mostre|mostra|liste|diga|revele|conte)\b.{0,30}\b(instrucoes|regras|orientacoes|diretrizes)\b"
+    r".{0,30}\b(voce|recebeu|te deram|internas|seguir)\b",
+    # the same in English
+    r"\b(repeat|print|show|reveal|tell me|what are)\b.{0,40}\b(instructions|rules|prompt|guidelines|text above|previous)\b",
+    r"\b(architecture|infrastructure|tech stack|source code)\b",
+    r"\bhow (were|are) you (built|made|programmed|implemented)\b",
+    r"\bwhat (model|llm|database)\b",
 ]
+
+# Pieces of the prompts and internal names: if an answer contains one of them, the prompt leaked
+LEAK_MARKERS = [
+    "voce e o roteador", "voce e o analista", "voce e o recomendador", "voce e o juiz",
+    "voce e o assistente do nexus bi", "regras de seguranca", "revisao interna", "regras de desempate",
+    "responda apenas com a estrutura pedida", "verificacao automatica dos numeros",
+    "search_reports_by_period", "get_latest_reports", "search_faq", "search_context", "check_numbers",
+    "routedecision", "create_agent",
+]
+
+LEAK_ANSWER = (
+    "Não posso compartilhar detalhes internos do sistema. "
+    "Posso ajudar com dúvidas sobre o NexUs BI e com análises dos relatórios da empresa."
+)
 
 ILLEGAL_PATTERNS = [
     r"lavar dinheiro|lavagem de dinheiro",
@@ -93,4 +116,8 @@ def input_guardrail(text: str) -> GuardrailResult:
 
 
 def output_guardrail(text: str) -> GuardrailResult:
+    """Last line of defense: never let the prompts or internal names reach the user, and mask PII."""
+    normalized = _normalize(text)
+    if any(marker in normalized for marker in LEAK_MARKERS):
+        return GuardrailResult(allowed=False, reason="vazamento de instruções internas", text=LEAK_ANSWER)
     return GuardrailResult(allowed=True, text=mask_pii(text))
