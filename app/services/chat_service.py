@@ -4,17 +4,23 @@ import uuid
 from app.core.memory import clear_session, store
 from app.core.orchestrator import Orchestrator
 from app.model.llm import explain_error
-from app.schemas.api import ChatRequest, ChatResponse
+from app.schemas.api import ChatRequest, ChatResponse, CurrentUser
 
 
 class LLMError(Exception):
     """Failure talking to the model (quota, key, unavailability...)."""
 
 
-def answer_question(request: ChatRequest) -> ChatResponse:
+def _memory_key(session_id: str, user: CurrentUser) -> str:
+    """The memory is stored per company + session: another company that guesses (or reuses)
+    the session_id still gets an empty history."""
+    return f"{user.company_id}:{session_id}"
+
+
+def answer_question(request: ChatRequest, user: CurrentUser) -> ChatResponse:
     session_id = request.session_id or str(uuid.uuid4())
     try:
-        result = Orchestrator(session_id, request.company_id).process(request.question)
+        result = Orchestrator(_memory_key(session_id, user)).process(request.question)
     except Exception as e:  # noqa: BLE001
         raise LLMError(explain_error(e)) from e
 
@@ -26,8 +32,9 @@ def answer_question(request: ChatRequest) -> ChatResponse:
     )
 
 
-def end_session(session_id: str) -> bool:
+def end_session(session_id: str, user: CurrentUser) -> bool:
     """Erase the session memory. Returns False if it did not exist."""
-    existed = session_id in store
-    clear_session(session_id)
+    key = _memory_key(session_id, user)
+    existed = key in store
+    clear_session(key)
     return existed
