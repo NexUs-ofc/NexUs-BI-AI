@@ -58,6 +58,32 @@ Com `LANGSMITH_TRACING=true` e `LANGSMITH_API_KEY` no `.env` (os nomes antigos `
 (projeto `ceris-ms-ia-bi`) como uma árvore: `orchestrator` → nós do grafo (`@traceable`) → agentes, chamadas
 ao Gemini e tools. Com `LANGSMITH_TRACING=false`, nada é enviado.
 
+## Métricas (custo, latência, erros, ROI)
+
+O NexUs BI (web) grava as métricas em coleções próprias no `db_ceris`, separadas das do NexUs-AI (mobile)
+(`app/observability/metrics.py`). As duas compartilham o `trace_id` da pergunta:
+
+- `metrics_bi`: um documento por pergunta, com rota, se foi resolvida (o juiz aprovou a resposta de um
+  especialista), bloqueada ou reprovada, erro, tempo total e de cada nó do grafo, nº de tools, tokens do
+  Gemini e custo estimado (`app/observability/cost.py`, preços de 10/2026).
+- `tool_metrics_bi`: um documento por chamada de tool (`trace_id`, `tool_name`, `started_at`, `finished_at`,
+  `duration_ms`, `success`), no mesmo formato da `tool_metrics` do NexUs-AI.
+
+`GET /metrics/report` (header `X-API-Key`) calcula, para os últimos `days` dias:
+
+| Métrica | Como é calculada |
+|---|---|
+| Custo para 100 e 1000 usuários/semana | custo médio por pergunta × usuários × `questions_per_user_week` (padrão 10) |
+| Latência interagentes e total | média e p95 de cada nó (`input_guardrail`, `router`, `specialist`, `judge`, `finish`) e do total |
+| Índice de erros | perguntas que terminaram em exceção ÷ total (reprovações do juiz e bloqueios aparecem separados) |
+| Custo por resolução | custo total ÷ perguntas resolvidas |
+| ROI | (economia − custo) ÷ custo; economia = resolvidas × `minutes_saved_per_resolution` (padrão 10) × `analyst_hour_brl` (padrão R$ 50) |
+
+O dólar vem da PTAX do Banco Central (cotação oficial do dia, consultada no máximo uma vez por dia); se a
+API estiver fora do ar, usa um valor fixo. O campo `usd_to_brl_source` do relatório mostra qual foi usado.
+
+As premissas podem ser trocadas na própria URL, por exemplo `/metrics/report?days=30&analyst_hour_brl=80`.
+
 ## Estrutura
 
 ```
@@ -83,7 +109,11 @@ app/
   tools/report_tools.py         # tools de relatórios usadas pelo analista e pelo recomendador
   tools/faq_tools.py            # tool search_faq (FAQ retriever)
   tools/judge_tools.py          # tools de validação do juiz (sem LLM)
-  observability/                # vazia: a observabilidade é feita pelo LangSmith
+  observability/cost.py         # preço do Gemini e cotação do dólar
+  observability/metrics.py      # mede cada nó e cada tool e grava as métricas
+  repository/metrics_repository.py # coleções metrics_bi e tool_metrics_bi no MongoDB
+  services/metrics_service.py   # relatório: cenários, latência, erros, custo por resolução, ROI
+  controller/metrics_controller.py # GET /metrics/report
 ```
 
 Memória: `app/core/memory.py`, apenas em RAM e por sessão (`session_id`). Reiniciar o servidor apaga tudo.
