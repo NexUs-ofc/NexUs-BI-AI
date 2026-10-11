@@ -48,7 +48,7 @@ def get_current_user(
     # 3) The company must exist and be active in the Auth database
     try:
         company_id = find_active_company_id(profile_id)
-    except Exception as error:  # noqa: BLE001 - database offline, wrong URL...
+    except Exception as error:
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE, "Não foi possível verificar a empresa no momento."
         ) from error

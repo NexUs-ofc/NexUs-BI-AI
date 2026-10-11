@@ -21,7 +21,7 @@ def answer_question(request: ChatRequest, user: CurrentUser) -> ChatResponse:
     session_id = request.session_id or str(uuid.uuid4())
     try:
         result = Orchestrator(_memory_key(session_id, user)).process(request.question)
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         raise LLMError(explain_error(e)) from e
 
     return ChatResponse(
