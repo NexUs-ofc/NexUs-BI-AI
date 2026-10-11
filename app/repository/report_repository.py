@@ -15,14 +15,15 @@ FIELD_YEAR = "ano"
 
 
 @lru_cache(maxsize=1)
-def _client() -> MongoClient:
+def get_mongo_client() -> MongoClient:
+    """Single MongoClient shared by the repositories (reports and metrics)."""
     if not MONGODB_URI:
         raise RuntimeError("MONGODB_URI não definida. Preencha o arquivo .env (veja .env.example).")
     return MongoClient(MONGODB_URI, serverSelectionTimeoutMS=5000)
 
 
 def get_reports_collection() -> Collection:
-    return _client()[MONGODB_DB][MONGODB_REPORTS_COLLECTION]
+    return get_mongo_client()[MONGODB_DB][MONGODB_REPORTS_COLLECTION]
 
 
 # month/year may be saved as int or as text ("09"); $toInt normalizes both so sorting and ranges work.
