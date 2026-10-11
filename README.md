@@ -10,11 +10,38 @@ sistema responde sobre o NexUs BI ou sobre os relatórios mensais, com um juiz c
 ```bash
 pip install -r requirements.txt
 cp .env.example .env                    # preencha as variáveis (veja o próprio arquivo)
-python -m app.services.faq_service      # carrega o app/static/faq.json no Qdrant
-python -m uvicorn app.app:app --reload  # documentação em http://localhost:8000/docs
+python -m app.model.llm                 # 1. a chave do Gemini funciona?
+python -m app.services.faq_service      # 2. carrega o FAQ no Qdrant
+python -m app.auth.jwt_handler <id>     # 3. gera um token de teste
+python -m uvicorn app.app:app --reload  # 4. sobe a API: http://localhost:8000/docs
 ```
 
-Testes rápidos: `python -m app.model.llm` (chave do Gemini) e `python -m app.core.orchestrator` (desenha o grafo).
+## Comandos do projeto
+
+Rode na raiz do projeto.
+
+| Para quê | Comando |
+|---|---|
+| Instalar as dependências | `pip install -r requirements.txt` |
+| Subir a API (docs em http://localhost:8000/docs) | `python -m uvicorn app.app:app --reload` |
+| Carregar o `faq.json` no Qdrant (sempre que editar o FAQ) | `python -m app.services.faq_service` |
+| Testar a chave do Gemini | `python -m app.model.llm` |
+| Gerar um token de teste para uma empresa (vale 8h) | `python -m app.auth.jwt_handler <profile_id>` |
+| Desenhar o grafo em Mermaid (cole em mermaid.live) | `python -m app.core.orchestrator` |
+
+## Verificações
+
+Comandos de diagnóstico para conferir se cada parte está funcionando (PowerShell, na raiz do projeto).
+
+| O que confere | Comando | Resultado esperado |
+|---|---|---|
+| FAQ carregado no Qdrant | `python -c "from app.repository.faq_repository import get_qdrant; from app.config import QDRANT_COLLECTION_FAQ as c; q = get_qdrant(); e = q.collection_exists(c); print('coleção:', c, '- existe:', e, '- itens:', q.count(c).count if e else 0)"` | `existe: True` e o nº de itens do `faq.json` |
+| Empresas ativas no Postgres do Auth (ids para o token) | `python -c "import psycopg; from app.config import PGSQL_URL; c = psycopg.connect(PGSQL_URL); print(c.execute('select p.id, p.name from company c join profile p on p.id = c.profile_id where p.type = %s and p.status = %s', ('COMPANY', 'ACTIVE')).fetchall())"` | lista de `(id, nome)` |
+| Consulta de empresa da API | `python -c "from app.repository.company_repository import find_active_company_id as f; print(f(999999))"` | `None` (troque por um id ativo para ver o id da empresa) |
+| Chave e workspace do LangSmith | `python -c "import app.config; from langsmith import Client; print([p.name for p in Client().list_projects(name_contains='ceris')])"` | lista com os projetos `ceris-ms-ia...` |
+| Métricas sendo gravadas (últimas 24h) | `python -c "from app.repository.metrics_repository import find_metrics_since as f; from datetime import datetime, timedelta, timezone; d = f(datetime.now(timezone.utc) - timedelta(days=1)); print(len(d), 'métricas'); print(d[-1] if d else '')"` | 1 ou mais métricas depois de fazer perguntas |
+| Cotação do dólar usada no relatório | `python -c "from app.observability.cost import get_usd_to_brl; print(get_usd_to_brl())"` | `(valor, 'PTAX Banco Central dd/mm/aaaa')` |
+| Gerar uma chave aleatória (ex.: nova `API_KEY`) | `python -c "import secrets; print(secrets.token_hex(32))"` | texto de 64 caracteres |
 
 ## Como chamar a API
 
@@ -26,7 +53,7 @@ As rotas `/chat` exigem dois headers (mesmo esquema do NexUs-AI):
 | `Authorization: Bearer <token>` | token do login no site, emitido pelo NexUs-Auth |
 
 O token precisa ser de um perfil **COMPANY** com empresa **ACTIVE** no PostgreSQL do Auth; outros perfis
-recebem 403. Para testar sem o site: `python -m app.auth.jwt_handler <profile_id>` gera um token.
+recebem 403. Para testar sem o site, gere um token com `python -m app.auth.jwt_handler <profile_id>`.
 
 | Rota | O que faz |
 |---|---|
