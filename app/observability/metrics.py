@@ -8,7 +8,7 @@ Both share the trace_id of the question. services/metrics_service.py turns them 
 import functools
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from langchain_core.callbacks import BaseCallbackHandler
 
@@ -50,7 +50,7 @@ class ToolMetricsCallback(BaseCallbackHandler):
 
     def on_tool_start(self, serialized, input_str, *, run_id, **kwargs):
         name = kwargs.get("name") or (serialized or {}).get("name", "unknown")
-        self._running[run_id] = (name, datetime.now(timezone.utc), time.perf_counter())
+        self._running[run_id] = (name, datetime.now(UTC), time.perf_counter())
 
     def on_tool_end(self, output, *, run_id, **kwargs):
         self._finish(run_id, success=True)
@@ -60,13 +60,13 @@ class ToolMetricsCallback(BaseCallbackHandler):
 
     def _finish(self, run_id, success: bool) -> None:
         name, started_at, started_perf = self._running.pop(
-            run_id, ("unknown", datetime.now(timezone.utc), time.perf_counter())
+            run_id, ("unknown", datetime.now(UTC), time.perf_counter())
         )
         self.tool_calls.append({
             "trace_id": self.trace_id,
             "tool_name": name,
             "started_at": started_at,
-            "finished_at": datetime.now(timezone.utc),
+            "finished_at": datetime.now(UTC),
             "duration_ms": (time.perf_counter() - started_perf) * 1000,
             "success": success,
         })
@@ -94,7 +94,7 @@ def record_question(
     approved = bool(state.get("approved"))
     document = {
         "trace_id": trace_id,
-        "created_at": datetime.now(timezone.utc),
+        "created_at": datetime.now(UTC),
         "route": route,
         "resolved": error is None and route in SPECIALIST_ROUTES and approved,
         "blocked": route == "blocked",

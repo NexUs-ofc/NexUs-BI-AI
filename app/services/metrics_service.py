@@ -7,7 +7,7 @@
 - ROI = (savings - cost) / cost, where savings = resolved questions x minutes saved x analyst hour
 """
 import math
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from app.observability.cost import get_usd_to_brl
 from app.repository.metrics_repository import find_metrics_since, find_tool_calls_since
@@ -56,7 +56,7 @@ def build_report(
     analyst_hour_brl: float = ANALYST_HOUR_BRL,
 ) -> MetricsReport:
     usd_to_brl, rate_source = get_usd_to_brl()
-    since = datetime.now(timezone.utc) - timedelta(days=days)
+    since = datetime.now(UTC) - timedelta(days=days)
     docs = find_metrics_since(since)
     total = len(docs)
     resolved = sum(d["resolved"] for d in docs)
