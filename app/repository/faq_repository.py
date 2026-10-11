@@ -51,6 +51,14 @@ def index_faq(items: list[dict]) -> int:
     return len(items)
 
 
+def count_faq_items() -> int:
+    """How many FAQ items are indexed (0 if the collection does not exist)."""
+    qdrant = get_qdrant()
+    if not qdrant.collection_exists(QDRANT_COLLECTION_FAQ):
+        return 0
+    return qdrant.count(QDRANT_COLLECTION_FAQ).count
+
+
 def search_faq(question: str, limit: int) -> list[dict]:
     """Return the FAQ items most similar to the question (empty if the collection does not exist)."""
     qdrant = get_qdrant()
