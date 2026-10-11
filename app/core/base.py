@@ -8,14 +8,17 @@ the tool runs, its result goes back to the LLM, and so on until a final answer.
 - final_text / structured_output / tool_trace: read what we need from that state.
 """
 from langchain.agents import create_agent
-from langchain.agents.middleware import ModelCallLimitMiddleware, ToolCallLimitMiddleware
+from langchain.agents.middleware import (
+    ModelCallLimitMiddleware,
+    ToolCallLimitMiddleware,
+)
 from langchain.agents.structured_output import ToolStrategy
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.tools import BaseTool
 
-from app.model.llm import get_llm
 from app.core.prompts.orchestrator import LIMIT_REACHED_ANSWER
 from app.core.prompts.security import SECURITY_RULES
+from app.model.llm import get_llm
 
 MAX_TOOL_CALLS = 4  # tool calls allowed per question; after that the agent must answer with what it has
 MAX_MODEL_CALLS = 8  # LLM calls allowed per question; protects against loops (and API cost)

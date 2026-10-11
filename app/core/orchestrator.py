@@ -31,12 +31,21 @@ from app.core.analyst import analyst_agent
 from app.core.faq import faq_agent
 from app.core.judge import judge
 from app.core.memory import get_session_history
+from app.core.prompts.orchestrator import (
+    JUDGE_REVISION,
+    OUT_OF_SCOPE_ANSWER,
+    REJECTED_ANSWER,
+)
+from app.core.prompts.recommender import RECOMMENDER_DISCLAIMER
 from app.core.recommender import recommender_agent
 from app.core.router import route
 from app.guardrails.guardrails import input_guardrail, output_guardrail
-from app.observability.metrics import ToolMetricsCallback, new_trace_id, record_question, timed
-from app.core.prompts.orchestrator import JUDGE_REVISION, OUT_OF_SCOPE_ANSWER, REJECTED_ANSWER
-from app.core.prompts.recommender import RECOMMENDER_DISCLAIMER
+from app.observability.metrics import (
+    ToolMetricsCallback,
+    new_trace_id,
+    record_question,
+    timed,
+)
 from app.schemas.agents import Result
 
 SPECIALISTS = {
