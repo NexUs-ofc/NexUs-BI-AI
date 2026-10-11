@@ -23,9 +23,8 @@ SPECIALISTS = {
 
 
 class Orchestrator:
-    def __init__(self, session_id: str, company_id: str | None = None):
+    def __init__(self, session_id: str):
         self.session_id = session_id
-        self.company_id = company_id  # limits the report tools to this company
 
     @property
     def history(self):
@@ -40,7 +39,8 @@ class Orchestrator:
             steps.append(f"guardrail de entrada: BLOQUEADO ({guard_in.reason})")
             return Result(answer=guard_in.reason, route="blocked", steps=steps)
         question = guard_in.text
-        steps.append("guardrail de entrada: ok")
+        masked = " (dados pessoais mascarados)" if question != message.strip() else ""
+        steps.append(f"guardrail de entrada: ok{masked}")
 
         history = self.history.messages
 
@@ -57,10 +57,13 @@ class Orchestrator:
             current_input, approved = question, False
             output = SpecialistAnswer(answer="")
             for attempt in range(MAX_JUDGE_RETRIES + 1):
-                output = specialist(current_input, history, company_id=self.company_id)
+                output = specialist(current_input, history)
                 if output.tool_calls:
                     steps.append(f"tools: {', '.join(output.tool_calls)}")
-                verdict = judge(question, output.answer, output.context, decision.route)
+                verdict = judge(question, output.answer, output.context, decision.route, history)
+                steps.append(f"validação de números: {verdict.number_check}")
+                if verdict.tool_calls:
+                    steps.append(f"tools do juiz: {', '.join(verdict.tool_calls)}")
                 steps.append(
                     f"juiz (tentativa {attempt + 1}): {'aprovado' if verdict.approved else 'reprovado'} "
                     f"nota={verdict.score} - {verdict.reason}"
@@ -68,7 +71,9 @@ class Orchestrator:
                 if verdict.approved:
                     approved = True
                     break
-                current_input = JUDGE_REVISION.format(question=question, reason=verdict.reason)
+                current_input = JUDGE_REVISION.format(
+                    question=question, previous_answer=output.answer, reason=verdict.reason
+                )
             answer = output.answer if approved else REJECTED_ANSWER
 
         if decision.route == "recommender" and approved:
