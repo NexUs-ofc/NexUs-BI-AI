@@ -7,6 +7,8 @@ Both carry the same trace_id, which links a question to the tools it called.
 """
 from datetime import datetime
 
+from pymongo.errors import PyMongoError
+
 from app.config import MONGODB_DB
 from app.repository.report_repository import get_mongo_client
 
@@ -33,3 +35,22 @@ def find_metrics_since(since: datetime) -> list[dict]:
 
 def find_tool_calls_since(since: datetime) -> list[dict]:
     return list(_collection(TOOL_METRICS_COLLECTION).find({"started_at": {"$gte": since}}, {"_id": 0}))
+
+
+def find_metrics_between(since: datetime, until: datetime) -> list[dict]:
+    """For the admin panel: an empty list when MongoDB fails, so the page shows zero instead of an error."""
+    try:
+        query = {"created_at": {"$gte": since, "$lt": until}}
+        return list(_collection(METRICS_COLLECTION).find(query, {"_id": 0}))
+    except PyMongoError as e:
+        print(f"[metrics] ATENÇÃO: não foi possível ler as métricas: {e}")
+        return []
+
+
+def find_tool_calls_between(since: datetime, until: datetime) -> list[dict]:
+    try:
+        query = {"started_at": {"$gte": since, "$lt": until}}
+        return list(_collection(TOOL_METRICS_COLLECTION).find(query, {"_id": 0}))
+    except PyMongoError as e:
+        print(f"[metrics] ATENÇÃO: não foi possível ler as chamadas de tool: {e}")
+        return []
