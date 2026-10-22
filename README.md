@@ -41,7 +41,7 @@ Comandos de diagnóstico para conferir se cada parte está funcionando (PowerShe
 | Chave e workspace do LangSmith | `python -c "import app.config; from langsmith import Client; print([p.name for p in Client().list_projects(name_contains='ceris')])"` | lista com os projetos `ceris-ms-ia...` |
 | Métricas sendo gravadas (últimas 24h) | `python -c "from app.repository.metrics_repository import find_metrics_since as f; from datetime import datetime, timedelta, timezone; d = f(datetime.now(timezone.utc) - timedelta(days=1)); print(len(d), 'métricas'); print(d[-1] if d else '')"` | 1 ou mais métricas depois de fazer perguntas |
 | Cotação do dólar usada no relatório | `python -c "from app.observability.cost import get_usd_to_brl; print(get_usd_to_brl())"` | `(valor, 'PTAX Banco Central dd/mm/aaaa')` |
-| Gerar uma chave aleatória (ex.: nova `API_KEY`) | `python -c "import secrets; print(secrets.token_hex(32))"` | texto de 64 caracteres |
+| Gerar uma chave aleatória (ex.: nova `API_KEY` ou `ADMIN_API_KEY`) | `python -c "import secrets; print(secrets.token_hex(32))"` | texto de 64 caracteres |
 
 ## Como chamar a API
 
@@ -59,8 +59,19 @@ recebem 403. Para testar sem o site, gere um token com `python -m app.auth.jwt_h
 |---|---|
 | `POST /chat` | `{"question", "session_id"?, "debug"?}` → `{"session_id", "answer", "route", "steps"}` |
 | `DELETE /chat/{session_id}` | apaga a memória da sessão |
-| `GET /metrics/report` | custo, latência, erros e ROI (só `X-API-Key`) |
 | `GET /health` | status e variáveis faltando (sem autenticação) |
+
+As rotas do painel do administrador usam outra chave, no header `X-Admin-Key` (`ADMIN_API_KEY` do `.env`).
+É a mesma em todos os serviços do NexUs, para o painel entrar uma vez só; a `API_KEY` das empresas não abre
+estas rotas. O contrato completo está em [Painel do administrador](docs/painel-admin.md).
+
+| Rota | O que faz |
+|---|---|
+| `GET /admin/session` | confirma a chave no login do painel |
+| `GET /admin/metrics?dias=7` | a página do BI IA no painel: resumo, desempenho, custo e qualidade (MongoDB) |
+| `GET /admin/report?dias=7` | o período contra o período anterior de mesmo tamanho |
+| `GET /admin/langsmith?dias=7` | execuções por dia, p50/p99 por chain e por agente, feedback (LangSmith) |
+| `GET /admin/roi` | custo, cenários para 100 e 1000 usuários e ROI em reais (era `GET /metrics/report`) |
 
 Para continuar uma conversa, reenvie o `session_id`. Com `"debug": true` a resposta mostra o passo a passo.
 
@@ -110,9 +121,12 @@ Os prompts ficam em `app/core/prompts/`, um arquivo por agente, com regras e exe
   (orquestrador → nós do grafo com `@traceable` → agentes, Gemini e tools).
 - **MongoDB:** coleções próprias do web, separadas das do mobile e ligadas pelo `trace_id`:
   `metrics_bi` (uma por pergunta) e `tool_metrics_bi` (uma por chamada de tool).
-- **`GET /metrics/report`:** custo para 100 e 1000 usuários/semana, latência de cada agente e total, índice de
+- **`GET /admin/metrics`:** a página do BI IA no painel do administrador, no mesmo formato da página da IA do
+  mobile. Além do que já era gravado, cada pergunta passa a dizer se o guardrail de saída bloqueou e se o erro
+  foi de cota do Gemini (429).
+- **`GET /admin/roi`:** custo para 100 e 1000 usuários/semana, latência de cada agente e total, índice de
   erros, custo por resolução e ROI. O dólar vem da PTAX do Banco Central. As premissas mudam pela URL, ex.:
-  `/metrics/report?days=30&analyst_hour_brl=80`.
+  `/admin/roi?days=30&analyst_hour_brl=80`.
 
 ## Estrutura
 
@@ -120,7 +134,7 @@ Os prompts ficam em `app/core/prompts/`, um arquivo por agente, com regras e exe
 app/
   app.py, config.py   API e variáveis do .env
   controller/         rotas (só chamam os services)
-  services/           chat, FAQ (ingestão) e relatório de métricas
+  services/           chat, FAQ (ingestão), relatório de métricas e painel do administrador
   core/               agentes, grafo do orquestrador e memória
   core/prompts/       prompts e descrições das tools
   tools/              tools dos agentes (relatórios, FAQ, juiz)
