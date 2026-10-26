@@ -5,6 +5,13 @@ sistema responde sobre o NexUs BI ou sobre os relatórios mensais, com um juiz c
 
 **Stack:** Python · FastAPI · LangChain 1.x (`create_agent`) · LangGraph · Gemini · Qdrant · MongoDB · PostgreSQL · LangSmith
 
+O projeto tem duas partes:
+
+| Parte | Pasta | O que faz |
+|---|---|---|
+| Chatbot | `app/` | responde perguntas sobre o NexUs BI e sobre os relatórios mensais |
+| Gerador de relatórios | `report_generator/` | gera o relatório do mês (JSON no MongoDB + PDF). Veja [report_generator/README.md](report_generator/README.md) |
+
 ## Como rodar
 
 ```bash
@@ -100,7 +107,7 @@ Os prompts ficam em `app/core/prompts/`, um arquivo por agente, com regras e exe
 | Fonte | Uso |
 |---|---|
 | Qdrant | FAQ (`app/static/faq.json`); rode o `faq_service` sempre que editar o JSON |
-| MongoDB `db_ceris` | relatórios mensais (um por mês, igual para todas as empresas; campos obrigatórios `mes` e `ano`) e métricas |
+| MongoDB `db_ceris` | relatórios mensais gerados pelo `report_generator` (um por mês, igual para todas as empresas; o chatbot só lê os publicados) e métricas |
 | PostgreSQL do Auth | confere se a empresa do token existe e está ativa |
 | Memória | só em RAM, por empresa + sessão; reiniciar o servidor apaga |
 
