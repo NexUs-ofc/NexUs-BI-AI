@@ -29,6 +29,10 @@ MAX_JUDGE_RETRIES = int(os.getenv("MAX_JUDGE_RETRIES", "1"))
 
 # --- API and authentication (same scheme as NexUs-AI: X-API-Key + Bearer JWT issued by the Auth service)
 API_KEY = os.getenv("API_KEY", "")  # key required in the X-API-Key header
+# Admin panel key (X-Admin-Key header): the same value in every NexUs service, separate from API_KEY
+ADMIN_API_KEY = os.getenv("ADMIN_API_KEY", "")
+# Daily token cap drawn on the panel's token chart (0 = no cap: Gemini's paid tier has none)
+DAILY_TOKEN_LIMIT = int(os.getenv("DAILY_TOKEN_LIMIT", "0"))
 JWT_SECRET = os.getenv("JWT_SECRET_BASE64", "")  # same name and value as in the Auth service (Base64)
 JWT_ALGORITHM = "HS256"
 JWT_ISSUER = "nexus-auth"  # value of the "iss" claim written by the Auth service
