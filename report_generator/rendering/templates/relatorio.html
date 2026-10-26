@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>NexUs BI · Relatório {{ periodo }}</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 20mm 16mm; }
+  :root {
+    --ink: #1d232b; --muted: #5d6773; --line: #dfe3e8; --soft: #f4f6f8;
+    --brand: #1f6f5c; --ok: #1f7a4d; --bad: #b3261e; --warn: #9a6200;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { margin: 0; color: var(--ink); font: 10.5pt/1.5 "Segoe UI", "Helvetica Neue", Arial, sans-serif; background: #fff; }
+  h1 { font-size: 21pt; line-height: 1.2; margin: 0 0 4pt; }
+  h2 { font-size: 13pt; color: var(--brand); margin: 18pt 0 8pt; padding-bottom: 4pt; border-bottom: 1.5pt solid var(--brand); break-after: avoid; }
+  h3 { font-size: 10.5pt; margin: 0 0 3pt; }
+  p { margin: 0 0 6pt; }
+  .muted { color: var(--muted); }
+  .small { font-size: 8.5pt; }
+
+  header.capa { border-left: 5pt solid var(--brand); padding: 4pt 0 4pt 12pt; margin-bottom: 14pt; }
+  .eyebrow { text-transform: uppercase; letter-spacing: .08em; font-size: 8.5pt; color: var(--brand); font-weight: 600; }
+  .rascunho { display: inline-block; margin-left: 6pt; padding: 1pt 6pt; border: 1pt solid var(--warn); color: var(--warn); border-radius: 3pt; font-size: 8pt; }
+  .base { display: flex; gap: 18pt; margin-top: 6pt; }
+  .base b { display: block; font-size: 13pt; }
+
+  .resumo { background: var(--soft); border-radius: 4pt; padding: 10pt 12pt; }
+
+  .cards { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6pt; }
+  .card { border: 1pt solid var(--line); border-radius: 4pt; padding: 7pt 8pt; break-inside: avoid; }
+  .card .cod { font-size: 8pt; color: var(--muted); }
+  .card .nome { font-size: 8.5pt; font-weight: 600; min-height: 22pt; line-height: 1.25; }
+  .card .valor { font-size: 17pt; font-weight: 700; margin: 2pt 0; font-variant-numeric: tabular-nums; }
+  .card .meta { font-size: 8pt; color: var(--muted); }
+  .status { display: inline-block; font-size: 7.5pt; font-weight: 600; padding: 1pt 5pt; border-radius: 8pt; margin-top: 3pt; }
+  .status.dentro_meta { background: #e3f3ea; color: var(--ok); }
+  .status.acima_da_meta { background: #fbe4e2; color: var(--bad); }
+  .status.alerta { background: #fdf0d9; color: var(--warn); }
+  .status.sem_dados, .status.sem_meta { background: var(--soft); color: var(--muted); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 9pt; font-variant-numeric: tabular-nums; }
+  thead { display: table-header-group; }
+  th { text-align: left; font-weight: 600; color: var(--muted); border-bottom: 1pt solid var(--ink); padding: 4pt 5pt; }
+  td { border-bottom: .5pt solid var(--line); padding: 3.5pt 5pt; }
+  tr { break-inside: avoid; }
+  td.num, th.num { text-align: right; }
+  tr.suprimido td { color: var(--muted); font-style: italic; }
+
+  .kpi-bloco { margin-bottom: 8pt; break-inside: avoid; }
+  .insight { border-left: 3pt solid var(--line); padding: 2pt 0 2pt 9pt; margin-bottom: 8pt; break-inside: avoid; }
+  .insight.alerta { border-color: var(--bad); }
+  .insight.tendencia { border-color: var(--brand); }
+  .insight.destaque { border-color: var(--warn); }
+  .tag { font-size: 7.5pt; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  ul { margin: 0; padding-left: 14pt; }
+  li { margin-bottom: 3pt; }
+  .quebra { break-before: page; }
+  .duas { display: grid; grid-template-columns: 1fr 1fr; gap: 14pt; }
+</style>
+</head>
+<body>
+{% set d = r.dados %}{% set n = r.narrativa %}
+
+<header class="capa">
+  <div class="eyebrow">NexUs BI · Relatório mensal
+    {% if r.status != "publicado" %}<span class="rascunho">RASCUNHO</span>{% endif %}
+  </div>
+  <h1>Desperdício e validade nas despensas<br>{{ periodo|capitalize }}</h1>
+  <div class="muted small">Data de referência: {{ data_ref }} · Gerado em {{ gerado_em }} · Fonte: {{ r.fonte_dados }}</div>
+  <div class="base">
+    <div><b>{{ d.base.households|int_br }}</b><span class="muted small">households</span></div>
+    <div><b>{{ d.base.itens_na_despensa|int_br }}</b><span class="muted small">itens na despensa</span></div>
+    <div><b>{{ d.base.eventos_no_mes|int_br }}</b><span class="muted small">eventos no mês</span></div>
+  </div>
+</header>
+
+<h2>1. Resumo executivo</h2>
+<div class="resumo"><p>{{ n.resumo_executivo }}</p></div>
+
+<h2>2. Indicadores do mês</h2>
+<div class="cards">
+  {% for code in card_kpis %}{% set k = d.kpis[code] %}
+  <div class="card">
+    <div class="cod">{{ k.codigo }}</div>
+    <div class="nome">{{ k.nome }}</div>
+    <div class="valor">{{ k.valor|pct }}</div>
+    <div class="meta">{{ "Alerta" if code == "D4" else "Meta" }}: até {{ k.meta|pct }}</div>
+    <div class="meta">vs. mês anterior: {{ k.variacao_pp|pp }}</div>
+    <span class="status {{ k.status }}">{{ status_label[k.status] }}</span>
+  </div>
+  {% endfor %}
+</div>
+<p class="small muted" style="margin-top:6pt">
+  D7 · Vida útil no cadastro: mediana de {{ d.vida_util.mediana|int_br }} dias
+  (1º quartil {{ d.vida_util.p25|int_br }}, 3º quartil {{ d.vida_util.p75|int_br }}, {{ d.vida_util.outliers|int_br }} outliers
+  {%- if d.vida_util.mediana_mes_anterior is not none %}; mês anterior: {{ d.vida_util.mediana_mes_anterior|int_br }} dias{% endif %}).
+</p>
+
+<h2>3. Análise por indicador</h2>
+{% for a in n.analise_por_kpi %}
+<div class="kpi-bloco">
+  <h3>{{ a.kpi }} · {{ kpi_names.get(a.kpi, "") }}</h3>
+  <p>{{ a.texto }}</p>
+</div>
+{% endfor %}
+
+<h2>4. Ranking de vencimento por UF (D3 e D5)</h2>
+<table>
+  <thead><tr><th>Rank D5</th><th>UF</th><th class="num">Households</th><th class="num">Itens c/ validade</th>
+    <th class="num">Vencidos</th><th class="num">A vencer 30d</th><th class="num">D3 % vencidos</th></tr></thead>
+  <tbody>
+  {% for u in d.por_uf %}
+    {% if u.suprimido %}
+    <tr class="suprimido"><td>—</td><td>{{ u.uf }}</td><td class="num">{{ u.households }}</td><td colspan="4">dados insuficientes (privacidade)</td></tr>
+    {% else %}
+    <tr><td>{{ u.d5_rank }}º</td><td>{{ u.uf }}</td><td class="num">{{ u.households|int_br }}</td><td class="num">{{ u.itens_com_validade|int_br }}</td>
+      <td class="num">{{ u.vencidos|int_br }}</td><td class="num">{{ u.a_vencer_30d|int_br }}</td><td class="num">{{ u.d3_pct_vencidos|pct }}</td></tr>
+    {% endif %}
+  {% endfor %}
+  </tbody>
+</table>
+
+<h2>5. Categorias de alimentos (D4, D7 e D9)</h2>
+<table>
+  <thead><tr><th>Categoria</th><th class="num">Households</th><th class="num">D4 % a vencer 7d</th>
+    <th class="num">Expirados no mês</th><th class="num">D9 índice</th><th class="num">D7 mediana (dias)</th></tr></thead>
+  <tbody>
+  {% for c in d.por_categoria %}
+    <tr><td>{{ c.categoria }}</td><td class="num">{{ c.households_com_categoria|int_br }}</td><td class="num">{{ c.d4_pct_a_vencer_7d|pct }}</td>
+      <td class="num">{{ c.expirados_no_mes|int_br }}</td><td class="num">{{ c.d9_indice_desperdicio|dec2 }}</td><td class="num">{{ c.d7_mediana_dias|int_br }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<h2>6. Alimentos mais abaixo do estoque mínimo (D6)</h2>
+{% if d.top_abaixo_minimo %}
+<table>
+  <thead><tr><th>#</th><th>Alimento</th><th>Categoria</th><th class="num">Households abaixo do mínimo</th></tr></thead>
+  <tbody>
+  {% for a in d.top_abaixo_minimo %}
+    <tr><td>{{ loop.index }}</td><td>{{ a.alimento }}</td><td>{{ a.categoria }}</td><td class="num">{{ a.households|int_br }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}<p class="muted">Nenhum alimento abaixo do mínimo no mês.</p>{% endif %}
+
+<h2>7. Insights</h2>
+{% for i in n.insights %}
+<div class="insight {{ i.tipo }}">
+  <div class="tag">{{ i.tipo }}{% if i.kpis %} · {{ i.kpis|join(", ") }}{% endif %}</div>
+  <h3>{{ i.titulo }}</h3>
+  <p>{{ i.texto }}</p>
+</div>
+{% endfor %}
+
+<h2>8. Recomendações</h2>
+<ul>{% for rec in n.recomendacoes %}<li>{{ rec }}</li>{% endfor %}</ul>
+
+<h2>9. Metodologia e limitações</h2>
+<div class="duas">
+  <div>
+    <h3>Fórmulas</h3>
+    <table class="small">
+      <tbody>{% for code, k in kpi_defs.items() %}<tr><td><b>{{ code }}</b></td><td>{{ k.nome }}<br><span class="muted">{{ k.formula }}</span></td></tr>{% endfor %}</tbody>
+    </table>
+  </div>
+  <div>
+    <h3>Limitações</h3>
+    <ul class="small">
+      {% for l in n.limitacoes %}<li>{{ l }}</li>{% endfor %}
+      <li>Dados agregados; UFs com menos de {{ min_households }} households não exibem números.</li>
+      <li>Números calculados por código; os textos foram escritos {{ "por IA a partir desses números" if r.gerado_com_ia else "por regras automáticas" }}.</li>
+    </ul>
+  </div>
+</div>
+</body>
+</html>
