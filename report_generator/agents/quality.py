@@ -1,7 +1,7 @@
 """Checagem automática: todo número da narrativa precisa existir nos dados ou nas saídas das tools.
 
-Não bloqueia a geração (o relatório nasce como rascunho); o resultado vai para `qualidade` no JSON e
-aparece na revisão antes de publicar.
+Não bloqueia a geração (o relatório já nasce publicado); o resultado vai para `qualidade` no JSON e
+aparece no relatório para quem for conferir.
 """
 import json
 import re

@@ -12,7 +12,7 @@ JSONs anteriores (Mongo) ──────────────────�
                          ┌─ analista descritivo ─┐  (asyncio, ao mesmo tempo)
                          └─ cientista de dados ──┴─► formalizador ──► narrativa
                                                                   │
-                     checagem de números ──► JSON no Mongo (rascunho) ──► chatbot (após publicar)
+                     checagem de números ──► JSON no Mongo (já publicado) ──► site e chatbot
                                                     └─► HTML (template + gráficos) ──► PDF ──► Supabase Storage
 ```
 
@@ -28,7 +28,7 @@ python -m playwright install chromium                         # uma vez por máq
 python -m report_generator.data.mock 2026 10                  # confere o mock
 python -m report_generator.run --mes-anterior                 # o mês que acabou (IA + JSON + PDF); não refaz se já existe
 python -m report_generator.run 2026 10                        # gera um mês específico
-python -m report_generator.run 2026 10 --publicar             # gera e já publica (o site e o chatbot passam a ver)
+python -m report_generator.run 2026 10                 # gera (já fica publicado: o site e o chatbot veem)
 python -m report_generator.run 2026 9 --historico 6 --atualizar-pdfs  # cria histórico que falta e refaz os PDFs
 python -m report_generator.run --atualizar-pdfs               # refaz os PDFs de todos os relatórios (sem IA)
 python -m pytest report_generator/tests -q                    # testes (Mongo em memória, sem Gemini)
@@ -45,7 +45,7 @@ Sem `SUPABASE_URL` no `.env`, o PDF fica em `output/relatorios/AAAA-MM.pdf`. As 
 Com a API rodando (`uvicorn`), o `scheduler.py` gera sozinho o relatório do mês anterior todo dia
 `REPORT_SCHEDULE_DAY` às `REPORT_SCHEDULE_HOUR` (padrão: dia 1, 03:00 de Brasília), com IA e PDF no Supabase.
 Se a API estava desligada no horário, gera assim que subir. Se o relatório do mês já existe, não refaz.
-Com `REPORT_AUTO_PUBLISH=true` ele já sai publicado; senão fica rascunho até um ADMIN publicar.
+Todo relatório já sai publicado: não há etapa de rascunho nem endpoint de publicar.
 Hospedagem que desliga a API ociosa (Cloud Run): agende `python -m report_generator.run --mes-anterior`
 num cron externo (mesma regra: não refaz o mês se ele já existe; `--forcar` refaz).
 
@@ -71,8 +71,8 @@ abaixo do estoque mínimo (D6). As tabelas continuam no relatório com os númer
 ## API (para a interface web)
 
 Todas as rotas pedem `X-API-Key` + `Authorization: Bearer <token do NexUs-Auth>`.
-Ler: perfis `REPORT_READ_PROFILES` (padrão COMPANY, ADMIN). Gerar/publicar: `REPORT_WRITE_PROFILES` (padrão ADMIN).
-COMPANY só vê relatórios **publicados**.
+Ler: perfis `REPORT_READ_PROFILES` (padrão COMPANY, ADMIN). Gerar: `REPORT_WRITE_PROFILES` (padrão ADMIN).
+
 
 | Rota | Quem | O que faz |
 |---|---|---|
@@ -82,7 +82,6 @@ COMPANY só vê relatórios **publicados**.
 | `GET /reports/{ano}/{mes}/pdf` | leitura | o PDF; `?download=true` baixa em vez de abrir |
 | `POST /reports/{ano}/{mes}/generate` | escrita | dispara a geração em segundo plano (202) |
 | `GET /reports/{ano}/{mes}/status` | escrita | `na_fila` → `em_execucao` → `concluido` ou `erro` |
-| `POST /reports/{ano}/{mes}/publish` | escrita | rascunho → publicado |
 | `GET /health` | — | variáveis faltando |
 
 Exemplo de `GET /reports`:
@@ -112,7 +111,7 @@ tela usa (região, heatmap categoria × região, histograma e boxplot de vida ú
 ## JSON do relatório
 
 ```
-{ ano, mes, status: rascunho|publicado, fonte_dados, gerado_em, gerado_com_ia,
+{ ano, mes, status: publicado, fonte_dados, gerado_em, gerado_com_ia,
   dados: {                       ← números (código). O mês seguinte lê só este bloco como histórico.
     base: { households, itens_na_despensa, eventos_no_mes, data_referencia },
     kpis: { D1, D3, D4, D6, D8: { valor, meta, status, numerador, denominador, mes_anterior, variacao_pp } },
