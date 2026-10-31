@@ -39,6 +39,8 @@ from report_generator.data.databricks import GoldData, ano_mes
 from report_generator.data.loader import last_day
 from report_generator.schemas import (
     AlimentoAbaixoMinimo,
+    AtrasoCategoria,
+    AtrasoFaixa,
     Base,
     Dados,
     DesperdicioCategoria,
@@ -183,6 +185,19 @@ def _momento_descarte(df: pd.DataFrame) -> list[MomentoDescarte]:
     return [m for _, m in sorted(rows, key=lambda x: x[0])]
 
 
+def _atraso_faixas(df: pd.DataFrame) -> list[AtrasoFaixa]:
+    rows = [AtrasoFaixa(inicio=_int(r["inicio"]) or 0, unidades=_int(r["unidades"]) or 0)
+            for _, r in df.dropna(subset=["inicio"]).iterrows() if (r["unidades"] or 0) > 0]
+    return sorted(rows, key=lambda f: f.inicio)
+
+
+def _atraso_categoria(df: pd.DataFrame) -> list[AtrasoCategoria]:
+    rows = [AtrasoCategoria(categoria=r["categoria"], q1=_num(r["q1"]), mediana=_num(r["mediana"]), q3=_num(r["q3"]),
+                            minimo=_num(r["minimo"]), maximo=_num(r["maximo"]), unidades=_int(r["unidades"]) or 0)
+            for _, r in _known(df).iterrows() if (r["unidades"] or 0) > 0]
+    return sorted(rows, key=lambda c: -c.unidades)
+
+
 def _evolucao(mensal: pd.DataFrame, meses: int = EVOLUCAO_MESES) -> list[PontoMensal]:
     """Taxa de desperdício e descarte por esquecimento dos últimos meses (kpi_desperdicio_mensal)."""
     rows = []
@@ -276,6 +291,8 @@ def gold_to_dados(gold: GoldData, previous: dict | None = None, hoje: date | Non
         desperdicio_categoria=eventos_categoria,
         desperdicio_regiao=_desperdicio_regiao(gold.fatos["evento_regiao"]),
         momento_descarte=_momento_descarte(gold.fatos["evento_momento"]),
+        atraso_faixas=_atraso_faixas(gold.fatos["evento_atraso_faixas"]),
+        atraso_categoria=_atraso_categoria(gold.fatos["evento_atraso_categoria"]),
     )
 
 

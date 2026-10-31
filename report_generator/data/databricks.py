@@ -61,6 +61,8 @@ COLUMNS = {
     "evento_regiao": ["regiao", "unidades_descartadas", "unidades_saidas", "descartadas_com_validade",
                       "esquecidas"],
     "evento_momento": ["momento", "unidades"],
+    "evento_atraso_faixas": ["inicio", "unidades"],
+    "evento_atraso_categoria": ["categoria", "q1", "mediana", "q3", "minimo", "maximo", "unidades"],
 }
 TEXT_COLUMNS = {"ano_mes", "uf", "nome_uf", "regiao", "categoria", "codigo", "data_referencia", "faixa", "alimento",
                 "momento"}
@@ -159,6 +161,22 @@ def _fato_queries() -> dict[str, str]:
             {evento}
             WHERE m.ano_mes_evento = :ano_mes AND m.expirado = 1
             GROUP BY m.momento_descarte""",
+        "evento_atraso_faixas": f"""
+            SELECT CAST(FLOOR(m.dias_apos_vencimento / 7) * 7 AS INT) AS inicio, SUM(m.qtd_descartada) AS unidades
+            {evento}
+            WHERE m.ano_mes_evento = :ano_mes AND m.expirado = 1 AND m.dias_apos_vencimento >= 0
+            GROUP BY 1""",
+        "evento_atraso_categoria": f"""
+            SELECT a.categoria,
+                   percentile_approx(m.dias_apos_vencimento, 0.25) AS q1,
+                   percentile_approx(m.dias_apos_vencimento, 0.5) AS mediana,
+                   percentile_approx(m.dias_apos_vencimento, 0.75) AS q3,
+                   MIN(m.dias_apos_vencimento) AS minimo, MAX(m.dias_apos_vencimento) AS maximo,
+                   SUM(m.qtd_descartada) AS unidades
+            {evento}
+            JOIN {t['dim_alimento']} a ON a.sk_alimento = m.sk_alimento
+            WHERE m.ano_mes_evento = :ano_mes AND m.expirado = 1 AND m.dias_apos_vencimento >= 0
+            GROUP BY a.categoria""",
         "regiao_categoria": f"""
             SELECT a.categoria, l.regiao,
                    SUM(CASE WHEN m.descartado = 1 THEN m.qtd_descartada ELSE 0 END) AS descartadas,

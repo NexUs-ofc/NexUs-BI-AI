@@ -58,6 +58,13 @@ def gold_tables() -> dict[str, pd.DataFrame]:
         {"momento": "1 · Antes de vencer", "unidades": D("40")},
         {"momento": "2 · Até 7 dias após vencer", "unidades": D("30")},
     ])
+    evento_atraso_faixas = pd.DataFrame([{"inicio": 0, "unidades": D("30")}, {"inicio": 14, "unidades": D("10")}])
+    evento_atraso_categoria = pd.DataFrame([
+        {"categoria": "Padaria", "q1": D("1"), "mediana": D("3"), "q3": D("20"), "minimo": D("0"), "maximo": D("60"),
+         "unidades": D("50")},
+        {"categoria": "Não informada", "q1": D("1"), "mediana": D("2"), "q3": D("3"), "minimo": D("0"),
+         "maximo": D("9"), "unidades": D("5")},
+    ])
     regiao_categoria = pd.DataFrame([
         {"categoria": "Padaria", "regiao": "Sudeste", "descartadas": 50, "consumidas": 200},
         {"categoria": "Padaria", "regiao": "Nordeste", "descartadas": 20, "consumidas": 80},
@@ -84,7 +91,9 @@ def gold_tables() -> dict[str, pd.DataFrame]:
     ])
     return {"kpi_desperdicio_mensal": mensal, "kpi_estado_diario": estado, "kpi_uf": uf,
             "kpi_cards": cards, "evento_resumo": evento_resumo, "evento_categoria": evento_categoria,
-            "evento_regiao": evento_regiao, "evento_momento": evento_momento, "regiao_categoria": regiao_categoria,
+            "evento_regiao": evento_regiao, "evento_momento": evento_momento,
+            "evento_atraso_faixas": evento_atraso_faixas, "evento_atraso_categoria": evento_atraso_categoria,
+            "regiao_categoria": regiao_categoria,
             "estoque_categoria": estoque_categoria, "estoque_total": estoque_total,
             "vida_util_faixas": vida_util_faixas, "abaixo_minimo": abaixo_minimo}
 
@@ -142,7 +151,7 @@ def test_queries_read_only_the_kpi_and_fato_tables(gold):
     q = databricks.build_queries(2026, 10)
     assert set(q) == {"kpi_desperdicio_mensal", "kpi_estado_diario", "kpi_uf", "kpi_cards",
                       "evento_resumo", "evento_categoria", "evento_regiao", "evento_momento",
-                      "regiao_categoria", "estoque_categoria", "estoque_total", "vida_util_faixas",
+                      "evento_atraso_faixas", "evento_atraso_categoria", "regiao_categoria", "estoque_categoria", "estoque_total", "vida_util_faixas",
                       "abaixo_minimo"}
     # KPIs de evento: filtrados pelo mês do evento em fato_movimento
     for name in ("evento_resumo", "evento_categoria", "evento_regiao", "evento_momento"):
@@ -152,7 +161,7 @@ def test_queries_read_only_the_kpi_and_fato_tables(gold):
     assert q["kpi_desperdicio_mensal"][1] == {"ano_mes": "2026-10"}
     assert q["estoque_total"][1] == {"ano_mes": "2026-10"}
     assert "`fato_movimento`" in q["regiao_categoria"][0] and "`fato_estoque_minimo`" in q["abaixo_minimo"][0]
-    assert len(gold.log) == 13 and gold.data_foto == "2026-10-31"
+    assert len(gold.log) == 15 and gold.data_foto == "2026-10-31"
     assert gold.mensal["d1_pct"].dtype.kind == "f"  # Decimal -> número
 
 
@@ -240,8 +249,8 @@ def test_mes_sem_foto_da_despensa_so_tem_indicadores_de_evento(monkeypatch):
     tables["kpi_estado_diario"] = tables["kpi_estado_diario"].iloc[0:0]  # setembro: sem foto
     log = []
     gold_set = databricks.load_gold(2026, 9, connect=lambda: FakeConnection(tables, log, databricks.STATE_TABLES))
-    # 2 kpi (mensal + estado) + 4 de evento + regiao_categoria = 7: as 6 de estado foram poupadas
-    assert len(log) == 7
+    # 2 kpi (mensal + estado) + 6 de evento + regiao_categoria = 9: as 6 de estado foram poupadas
+    assert len(log) == 9
     assert gold_set.uf.empty and gold_set.data_foto is None
 
     dados = gold_to_dados(gold_set)
@@ -318,6 +327,6 @@ def test_cache_reuses_the_same_month(monkeypatch):
     connect = lambda: FakeConnection(gold_tables(), log)
     first = databricks.load_gold_cached(2026, 10, ttl=60, connect=connect)
     again = databricks.load_gold_cached(2026, 10, ttl=60, connect=connect)
-    assert first is again and len(log) == 13
+    assert first is again and len(log) == 15
     databricks.load_gold_cached(2026, 9, ttl=60, connect=connect)
-    assert len(log) == 26  # outro mês = outra leitura
+    assert len(log) == 30  # outro mês = outra leitura

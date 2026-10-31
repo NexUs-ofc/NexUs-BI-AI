@@ -122,6 +122,23 @@ class MomentoDescarte(BaseModel):
     pct: float | None = None
 
 
+class AtrasoFaixa(BaseModel):
+    """Histograma: unidades descartadas por faixa de 7 dias depois do vencimento (inicio=0 -> 0 a 6 dias)."""
+    inicio: int
+    unidades: int
+
+
+class AtrasoCategoria(BaseModel):
+    """Boxplot do atraso (dias depois de vencer) das unidades descartadas, por categoria."""
+    categoria: str
+    q1: float | None = None
+    mediana: float | None = None
+    q3: float | None = None
+    minimo: float | None = None
+    maximo: float | None = None
+    unidades: int = 0
+
+
 class Dados(BaseModel):
     base: Base
     kpis: dict[str, KpiValor]
@@ -138,6 +155,8 @@ class Dados(BaseModel):
     desperdicio_categoria: list[DesperdicioCategoria] = Field(default_factory=list)
     desperdicio_regiao: list[DesperdicioRegiao] = Field(default_factory=list)
     momento_descarte: list[MomentoDescarte] = Field(default_factory=list)
+    atraso_faixas: list[AtrasoFaixa] = Field(default_factory=list)
+    atraso_categoria: list[AtrasoCategoria] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------- narrativa (agentes)

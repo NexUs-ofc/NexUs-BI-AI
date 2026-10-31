@@ -202,3 +202,14 @@ def test_save_report_confirma_e_job_guarda_historico(db):
     mongo.set_job(2026, 10, "erro", erro="boom")
     job = mongo.find_job(2026, 10)
     assert job["status"] == "erro" and [h["status"] for h in job["historico"]] == ["em_execucao", "erro"]
+
+
+def test_charts_trazem_media_movel_e_atraso_do_descarte(make_report):
+    from report_generator.charts_data import _faixas_atraso, _media_movel
+
+    assert _media_movel([10, 20, None, 30]) == [10.0, 15.0, 15.0, 25.0]
+    faixas = _faixas_atraso([{"inicio": 0, "unidades": 5}, {"inicio": 14, "unidades": 2}])
+    assert [f["rotulo"] for f in faixas] == ["0-6", "7-13", "14-20"] and faixas[1]["unidades"] == 0
+    payload = charts_payload(make_report(True))
+    assert all("mediaMovel3m" in p for p in payload["evolucao"])
+    assert payload["atrasoDescarte"]["porCategoria"] and payload["atrasoDescarte"]["faixas"]

@@ -15,6 +15,23 @@ def _kpi(k: dict) -> dict:
             "mesAnterior": k.get("mes_anterior")}
 
 
+def _media_movel(valores: list, janela: int = 3) -> list:
+    """Média dos últimos `janela` meses (ignora vazios), como a linha branca do dashboard do Databricks."""
+    out = []
+    for i in range(len(valores)):
+        w = [v for v in valores[max(0, i - janela + 1): i + 1] if v is not None]
+        out.append(round(sum(w) / len(w), 2) if w else None)
+    return out
+
+
+def _faixas_atraso(faixas: list[dict]) -> list[dict]:
+    mapa = {f["inicio"]: f["unidades"] for f in faixas}
+    if not mapa:
+        return []
+    return [{"inicio": i, "fim": i + 6, "rotulo": f"{i}-{i + 6}", "unidades": mapa.get(i, 0)}
+            for i in range(0, max(mapa) + 7, 7)]
+
+
 def charts_payload(report: dict) -> dict:
     d = report["dados"]
     tem_despensa = d.get("tem_despensa", True)
@@ -36,7 +53,15 @@ def charts_payload(report: dict) -> dict:
                    "avaliados": resumo.get("avaliados"), "foraDaMeta": resumo.get("fora_da_meta")},
         "kpis": {"desperdicio": evento, "despensa": estado},
         "evolucao": [{"anoMes": p["ano_mes"], "taxaDesperdicio": p.get("d1"), "descarteEsquecimento": p.get("d2"),
-                      "completo": p.get("completo", True)} for p in d.get("evolucao", [])],
+                      "completo": p.get("completo", True), "mediaMovel3m": mm}
+                     for p, mm in zip(d.get("evolucao", []),
+                                      _media_movel([p.get("d1") for p in d.get("evolucao", [])]), strict=True)],
+        "atrasoDescarte": {
+            "faixas": _faixas_atraso(d.get("atraso_faixas") or []),
+            "porCategoria": [{"categoria": c["categoria"], "q1": c.get("q1"), "mediana": c.get("mediana"),
+                              "q3": c.get("q3"), "minimo": c.get("minimo"), "maximo": c.get("maximo"),
+                              "unidades": c["unidades"]} for c in d.get("atraso_categoria") or []],
+        },
         "metas": {"taxaDesperdicio": KPIS["D1"].meta},
         "categorias": [{"categoria": c["categoria"], "unidadesDescartadas": c["unidades_descartadas"],
                         "unidadesSaidas": c["unidades_saidas"], "casas": c["casas"], "taxaDesperdicio": c.get("d1_pct"),
