@@ -82,7 +82,6 @@ if SCHEDULE_FREQUENCY not in ("diario", "mensal"):
 SCHEDULE_DAY = min(max(int(os.getenv("REPORT_SCHEDULE_DAY", "1")), 1), 28)  # só no modo mensal
 SCHEDULE_HOUR = min(max(int(os.getenv("REPORT_SCHEDULE_HOUR", "8")), 0), 23)
 SIGNED_URL_SECONDS = int(os.getenv("REPORT_PDF_URL_EXPIRES", "600"))
-AUTO_PUBLISH = _flag("REPORT_AUTO_PUBLISH", "false")  # true = publica sem revisão do ADMIN
 
 
 def validate_config(use_ai: bool = True) -> list[str]:

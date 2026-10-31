@@ -4,7 +4,6 @@
     python -m report_generator.run 2026 10 --sem-pdf       # só o JSON no Mongo
     python -m report_generator.run 2026 10 --historico 6   # gera antes os 6 meses anteriores (sem IA e
                                                            # sem PDF) para o Mongo ter histórico (mock)
-    python -m report_generator.run 2026 10 --publicar      # marca como publicado (o chatbot passa a ver)
     python -m report_generator.run --mes-anterior          # o mês que acabou, igual ao agendador: não refaz se já
                                                            # existir (use em cron externo; --forcar refaz)
     python -m report_generator.run --diario                # o que o agendador diário faz: atualiza o mês atual
@@ -62,7 +61,6 @@ def main(argv: list[str] | None = None) -> int:
                         help="refaz os PDFs de todos os relatórios já salvos, sem IA (template e gráficos atuais)")
     parser.add_argument("--sem-pdf", action="store_true", help="não gera o PDF")
     parser.add_argument("--historico", type=int, default=0, help="gera antes N meses anteriores (sem IA/PDF)")
-    parser.add_argument("--publicar", action="store_true", help="marca o relatório como publicado")
     args = parser.parse_args(argv)
     if args.atualizar_pdfs:
         logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -71,7 +69,6 @@ def main(argv: list[str] | None = None) -> int:
             for a, m in _previous_months(args.ano, args.mes, args.historico):
                 if not mongo.find_report(a, m):
                     pipeline.run(a, m, use_ai=False, with_pdf=False)
-                    mongo.set_status(a, m, "publicado")
                     print(f"  {m:02d}/{a}: histórico criado")
         return update_pdfs()
     if not args.mes_anterior and not args.diario and (args.ano is None or args.mes is None):
@@ -97,13 +94,10 @@ def main(argv: list[str] | None = None) -> int:
 
     for a, m in _previous_months(args.ano, args.mes, args.historico):
         pipeline.run(a, m, use_ai=False, with_pdf=False)
-        mongo.set_status(a, m, "publicado")
 
     report = pipeline.run(args.ano, args.mes, use_ai=True, with_pdf=not args.sem_pdf)
-    if args.publicar:
-        mongo.set_status(args.ano, args.mes, "publicado")
 
-    print(f"\nRelatório {args.mes:02d}/{args.ano} gerado ({'publicado' if args.publicar else 'rascunho'}).")
+    print(f"\nRelatório {args.mes:02d}/{args.ano} gerado e publicado.")
     for code, k in report["dados"]["kpis"].items():
         print(f"  {code} {k['nome']}: {k['valor']}{k['unidade']} [{k['status']}]")
     if report["qualidade"]["numeros_sem_fonte"]:
