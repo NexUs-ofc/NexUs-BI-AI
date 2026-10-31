@@ -11,6 +11,7 @@ Premissas do MVP (ajuste aqui se o time decidir diferente):
   total na despensa menor que o mínimo.
 - D9 é um índice (expirados por household), não porcentagem.
 - Privacidade: UF com menos de MIN_HOUSEHOLDS households tem os números omitidos.
+- D5 ranqueia pelo % em risco (vencidos + a vencer em 30 dias / itens com validade), como na Gold.
 """
 import pandas as pd
 
@@ -21,9 +22,12 @@ from report_generator.schemas import (
     AlimentoAbaixoMinimo,
     Base,
     Dados,
+    DesperdicioCategoria,
+    DesperdicioRegiao,
     KpiValor,
     LinhaCategoria,
     LinhaUF,
+    ResumoMes,
     VidaUtil,
 )
 
@@ -38,17 +42,24 @@ def _num(value) -> float | None:
     return None if value is None or pd.isna(value) else round(float(value), 1)
 
 
-def _kpi(codigo: str, num: float, den: float, previous: dict | None) -> KpiValor:
+def make_kpi(codigo: str, valor: float | None, previous: dict | None, numerador: float | None = None,
+             denominador: float | None = None, anterior: float | None = None) -> KpiValor:
+    """KPI com meta, status (por código) e variação contra o mês anterior (`previous` = bloco `dados` dele).
+    Usado pela análise do mock e pela leitura da Gold (analysis/gold.py)."""
     kpi = KPIS[codigo]
-    valor = _pct(num, den)
-    anterior = (previous or {}).get("kpis", {}).get(codigo, {}).get("valor")
+    if anterior is None:
+        anterior = ((previous or {}).get("kpis", {}).get(codigo) or {}).get("valor")
     variacao = round(valor - anterior, 1) if valor is not None and anterior is not None else None
     return KpiValor(codigo=codigo, nome=kpi.nome, unidade=kpi.unidade, valor=valor, meta=kpi.meta,
-                    regra=kpi.regra, status=kpi_status(codigo, valor), numerador=num, denominador=den,
-                    mes_anterior=anterior, variacao_pp=variacao)
+                    regra=kpi.regra, status=kpi_status(codigo, valor), numerador=numerador,
+                    denominador=denominador, mes_anterior=anterior, variacao_pp=variacao)
 
 
-def _with_expiry_flags(month: MonthData) -> pd.DataFrame:
+def _kpi(codigo: str, num: float, den: float, previous: dict | None) -> KpiValor:
+    return make_kpi(codigo, _pct(num, den), previous, num, den)
+
+
+def with_expiry_flags(month: MonthData) -> pd.DataFrame:
     items = month.items.copy()
     ref = pd.Timestamp(month.data_referencia)
     items["tem_validade"] = items["expiry_date"].notna()
@@ -97,16 +108,22 @@ def _por_uf(items: pd.DataFrame, households: pd.DataFrame) -> list[LinhaUF]:
             rows.append(LinhaUF(uf=uf, households=int(n), suprimido=True))
             continue
         a = agg.loc[uf]
+        em_risco = int(a.vencidos + a.a_vencer_30d)
         rows.append(LinhaUF(uf=uf, households=int(n), itens_com_validade=int(a.itens_com_validade),
                             vencidos=int(a.vencidos), a_vencer_30d=int(a.a_vencer_30d),
                             d3_pct_vencidos=_pct(a.vencidos, a.itens_com_validade),
-                            d5_pontuacao=int(a.vencidos + a.a_vencer_30d)))
-    # D5: DENSE_RANK (maior pontuação = 1º), só entre as UFs não suprimidas
-    scores = sorted({r.d5_pontuacao for r in rows if not r.suprimido}, reverse=True)
-    for r in rows:
-        if not r.suprimido:
-            r.d5_rank = scores.index(r.d5_pontuacao) + 1
+                            d5_pontuacao=em_risco, d5_pct_em_risco=_pct(em_risco, a.itens_com_validade)))
+    rank_uf_by_risk(rows)
     return sorted(rows, key=lambda r: (r.suprimido, r.d5_rank or 0, r.uf))
+
+
+def rank_uf_by_risk(rows: list[LinhaUF]) -> None:
+    """D5: DENSE_RANK pelo % em risco (maior = 1º), só entre as UFs não suprimidas (regra da Gold)."""
+    scores = sorted({r.d5_pct_em_risco for r in rows if not r.suprimido and r.d5_pct_em_risco is not None},
+                    reverse=True)
+    for r in rows:
+        if not r.suprimido and r.d5_pct_em_risco is not None:
+            r.d5_rank = scores.index(r.d5_pct_em_risco) + 1
 
 
 def _por_categoria(items: pd.DataFrame, events: pd.DataFrame) -> list[LinhaCategoria]:
@@ -125,9 +142,47 @@ def _por_categoria(items: pd.DataFrame, events: pd.DataFrame) -> list[LinhaCateg
     return sorted(rows, key=lambda r: -(r.d9_indice_desperdicio or 0))
 
 
+def _desperdicio_categoria(events: pd.DataFrame) -> list[DesperdicioCategoria]:
+    """Evento do mês por categoria (no mock, 1 evento = 1 unidade). D9 = descartadas ÷ casas da categoria."""
+    if events.empty:
+        return []
+    total = int((events["event_type"] == "item_expired").sum())
+    rows = []
+    for cat, g in events.groupby("categoria"):
+        desc = int((g["event_type"] == "item_expired").sum())
+        casas = int(g["household_id"].nunique())
+        rows.append(DesperdicioCategoria(
+            categoria=cat, unidades_descartadas=desc, unidades_saidas=len(g), casas=casas,
+            d1_pct=_pct(desc, len(g)), d9_indice=round(desc / casas, 2) if casas else None,
+            pct_do_desperdicio=_pct(desc, total)))
+    return sorted(rows, key=lambda r: (-(r.d9_indice or 0), r.categoria))
+
+
+def _desperdicio_regiao(events: pd.DataFrame) -> list[DesperdicioRegiao]:
+    if events.empty:
+        return []
+    from report_generator.analysis.dashboard import REGIONS, UF_REGION
+
+    names = {rid: name for rid, name, _ in REGIONS}
+    ev = events.assign(rid=events["uf"].map(UF_REGION))
+    rows = []
+    for rid, g in ev.dropna(subset=["rid"]).groupby("rid"):
+        desc = int((g["event_type"] == "item_expired").sum())
+        rows.append(DesperdicioRegiao(regiao=names.get(rid, str(rid)), unidades_descartadas=desc,
+                                      unidades_saidas=len(g), d1_pct=_pct(desc, len(g))))
+    return sorted(rows, key=lambda r: -(r.d1_pct or 0))
+
+
+def _resumo(events: pd.DataFrame, kpis: dict) -> ResumoMes:
+    avaliados = [k for k in kpis.values() if k.meta is not None and k.valor is not None]
+    return ResumoMes(unidades_saidas=len(events), unidades_descartadas=int((events["event_type"] == "item_expired").sum()),
+                     casas_com_movimento=int(events["household_id"].nunique()), avaliados=len(avaliados),
+                     fora_da_meta=sum(k.status in ("acima_da_meta", "alerta") for k in avaliados))
+
+
 def build_dados(month: MonthData, previous: dict | None = None) -> Dados:
     """Calcula o bloco `dados`. `previous` = bloco `dados` do mês anterior (do Mongo), para as variações."""
-    items = _with_expiry_flags(month)
+    items = with_expiry_flags(month)
     events = month.events
     valid = items[items["tem_validade"]]
 
@@ -156,4 +211,9 @@ def build_dados(month: MonthData, previous: dict | None = None) -> Dados:
         por_categoria=_por_categoria(items, events),
         top_abaixo_minimo=[AlimentoAbaixoMinimo(alimento=a, categoria=c, households=int(n))
                            for (a, c), n in top.items()],
+        tem_despensa=True,
+        data_foto_despensa=month.data_referencia.isoformat(),
+        resumo=_resumo(events, kpis),
+        desperdicio_categoria=_desperdicio_categoria(events),
+        desperdicio_regiao=_desperdicio_regiao(events),
     )
