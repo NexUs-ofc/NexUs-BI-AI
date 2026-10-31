@@ -24,7 +24,6 @@ ela dorme. Nesse caso agende num cron externo `python -m report_generator.run --
     REPORT_SCHEDULE_FREQUENCY=diario diario | mensal
     REPORT_SCHEDULE_HOUR=8           hora (0 a 23, horário de Brasília)
     REPORT_SCHEDULE_DAY=1            dia do mês (1 a 28), só no modo mensal
-    REPORT_AUTO_PUBLISH=false        true = já publica (sem revisão do ADMIN)
 """
 import asyncio
 import logging
@@ -32,7 +31,6 @@ from datetime import UTC, datetime, timedelta
 
 from report_generator import pipeline
 from report_generator.config import (
-    AUTO_PUBLISH,
     BRAZIL_TZ,
     SCHEDULE_DAY,
     SCHEDULE_ENABLED,
@@ -81,13 +79,11 @@ def next_daily_run(now: datetime) -> datetime:
     return today if now.astimezone(BRAZIL_TZ) < today else today + timedelta(days=1)
 
 
-def run_job(ano: int, mes: int, use_ai: bool = True, publish: bool = False) -> None:
+def run_job(ano: int, mes: int, use_ai: bool = True) -> None:
     """Gera um mês registrando o andamento em report_jobs (é o que a web consulta em .../status)."""
     mongo.set_job(ano, mes, "em_execucao")
     try:
         pipeline.run(ano, mes, use_ai=use_ai)
-        if publish:
-            mongo.set_status(ano, mes, "publicado")
         mongo.set_job(ano, mes, "concluido")
     except Exception as error:
         log.exception("Falha ao gerar %02d/%d", mes, ano)
@@ -109,8 +105,8 @@ def generate_previous_month(now: datetime | None = None, force: bool = False) ->
     if not force and mongo.find_report(ano, mes):
         return {"ano": ano, "mes": mes, "acao": "ignorado", "motivo": "relatório já existe"}
     log.info("Agendador: gerando o relatório de %02d/%d", mes, ano)
-    run_job(ano, mes, use_ai=True, publish=AUTO_PUBLISH)
-    return {"ano": ano, "mes": mes, "acao": "gerado", "publicado": AUTO_PUBLISH}
+    run_job(ano, mes, use_ai=True)
+    return {"ano": ano, "mes": mes, "acao": "gerado"}
 
 
 def generate_current_month(now: datetime | None = None) -> dict:
@@ -119,8 +115,8 @@ def generate_current_month(now: datetime | None = None) -> dict:
     if is_running(ano, mes):
         return {"ano": ano, "mes": mes, "acao": "ignorado", "motivo": "geração já em andamento"}
     log.info("Agendador: gerando o relatório parcial de %02d/%d", mes, ano)
-    run_job(ano, mes, use_ai=True, publish=AUTO_PUBLISH)
-    return {"ano": ano, "mes": mes, "acao": "gerado", "parcial": True, "publicado": AUTO_PUBLISH}
+    run_job(ano, mes, use_ai=True)
+    return {"ano": ano, "mes": mes, "acao": "gerado", "parcial": True}
 
 
 def generate_daily(now: datetime | None = None) -> dict:
@@ -134,7 +130,7 @@ def generate_daily(now: datetime | None = None) -> dict:
     anterior = mongo.find_report(ano, mes)
     if not is_running(ano, mes) and (anterior is None or anterior.get("parcial")):
         log.info("Agendador: fechando o relatório de %02d/%d", mes, ano)
-        run_job(ano, mes, use_ai=True, publish=AUTO_PUBLISH)
+        run_job(ano, mes, use_ai=True)
         results.append({"ano": ano, "mes": mes, "acao": "fechado"})
     results.append(generate_current_month(now))
     return {"acoes": results}

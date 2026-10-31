@@ -4,7 +4,7 @@
 2-3. KPIs do mês: Gold do Databricks ou mock        data/loader.py (analysis/gold.py ou descriptive.py)
 4. agentes escrevem a narrativa (ou regras --sem-ia) agents/
 5. checa os números da narrativa                    agents/quality.py
-6. salva o JSON no Mongo (status = rascunho)
+6. salva o JSON no Mongo (já publicado: o site e o chatbot veem na hora)
 7. JSON -> HTML (com gráficos) -> PDF -> Supabase Storage, e grava a URI do PDF no JSON
 """
 import logging
@@ -90,19 +90,16 @@ def run(ano: int, mes: int, use_ai: bool = True, with_pdf: bool = True, model=No
         keep_status: bool = True) -> dict:
     """Pipeline completo (passos 1 a 7). Usado pela CLI e pela API.
 
-    `keep_status`: gerar de novo um mês que já está PUBLICADO mantém "publicado" e o PDF atual (o relatório
-    diário do mês em andamento não some do site nem do chatbot a cada atualização). Com False, volta a rascunho."""
+    `keep_status`: gerar de novo um mês que já tem PDF mantém o PDF atual até o novo ficar pronto (o relatório
+    diário do mês em andamento não some do site a cada atualização)."""
     if not 1 <= mes <= 12:
         raise ValueError(f"Mês inválido: {mes}")
     report = build_report(ano, mes, use_ai=use_ai, model=model)
     existing = mongo.find_report(ano, mes) if keep_status else None
-    if existing:
-        if existing.get("status") == "publicado":
-            report["status"] = "publicado"
-        if existing.get("pdf"):
-            report["pdf"] = existing["pdf"]
+    if existing and existing.get("pdf"):
+        report["pdf"] = existing["pdf"]
     mongo.save_report(report)
-    log.info("JSON salvo no MongoDB (%02d/%d, rascunho)", mes, ano)
+    log.info("JSON salvo no MongoDB (%02d/%d)", mes, ano)
     if with_pdf:
         uri = files.save_pdf(render_pdf(report), ano, mes)
         mongo.set_pdf(ano, mes, uri)
