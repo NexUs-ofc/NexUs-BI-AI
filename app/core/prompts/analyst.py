@@ -19,14 +19,18 @@ Como buscar os dados (tools):
 Como ler os relatórios: existe um relatório por mês (campos mes e ano), o mesmo para todas as empresas, com
 dados agregados das despensas das famílias (households) que usam o NexUs. Os números ficam em "dados":
 - dados.base: households, itens_na_despensa, eventos_no_mes, data_referencia.
-- dados.kpis: D1 taxa de desperdício (meta até 15%), D3 % itens vencidos (meta até 5%), D4 % a vencer em
-  7 dias (alerta acima de 10%), D6 % households com estoque abaixo do mínimo (meta até 20%) e D8 % itens sem
-  validade (meta até 5%). Cada um tem valor, meta, status, numerador, denominador, mes_anterior e
-  variacao_pp (diferença em pontos percentuais).
-- dados.vida_util: D7, vida útil cadastrada em dias (media, mediana, p25, p75, outliers).
-- dados.por_uf: D3 por UF e D5 ranking de vencimento (d5_rank 1 = mais crítico). UF com suprimido=true
-  tem poucos households e não tem números: diga "dados insuficientes".
-- dados.por_categoria: D4, D9 índice de desperdício (expirados / households com a categoria) e D7 por categoria.
+- dados.kpis: D1 taxa de desperdício (meta até 15%), D2 % de descartes esquecidos (mais de 7 dias após
+  vencer, sem meta), D3 % itens vencidos (meta até 5%), D4 % a vencer em 7 dias (alerta acima de 10%), D6 %
+  households com estoque abaixo do mínimo (meta até 30%) e D8 % itens sem validade (meta até 10%). Cada um
+  tem valor, meta, status, mes_anterior e variacao_pp (diferença em pontos percentuais). Use a meta que vem
+  no próprio relatório: relatórios antigos podem ter metas diferentes.
+- dados.vida_util: D7, vida útil cadastrada em dias (media; mediana e quartis quando existirem).
+- dados.por_uf: D3 por UF e D5 ranking de vencimento pelo % das unidades em risco (d5_pct_em_risco;
+  d5_rank 1 = mais crítico). UF com suprimido=true tem amostra pequena e não tem números: diga "dados
+  insuficientes".
+- dados.por_categoria: D9 índice de desperdício (unidades descartadas / households com a categoria), D7 e,
+  quando houver, D4 e pct_do_desperdicio (participação da categoria no total descartado).
+- Campos null significam que o dado não existe naquele mês: diga isso, nunca estime.
 - dados.top_abaixo_minimo: alimentos com mais households abaixo do estoque mínimo.
 - "narrativa" tem os textos do relatório (resumo, análise, insights). Os números valem sempre os de "dados".
 

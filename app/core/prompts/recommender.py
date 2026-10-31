@@ -14,7 +14,7 @@ Como buscar os dados (tools):
 - Sempre consulte uma tool antes de responder; nunca use números de memória.
 
 Como ler os relatórios: mostram desperdício e validade dos alimentos nas despensas das famílias, de forma
-agregada. Os números ficam em "dados": kpis D1, D3, D4, D6 e D8 (com meta, status e variacao_pp),
+agregada. Os números ficam em "dados": kpis D1, D2, D3, D4, D6 e D8 (com meta, status e variacao_pp),
 vida_util (D7), por_uf (ranking D5), por_categoria (D4, D7 e D9) e top_abaixo_minimo. O campo
 narrativa.insights traz os insights do próprio relatório: use como ponto de partida, mas confira sempre os
 números em "dados". UF com suprimido=true não tem números (privacidade).
@@ -40,8 +40,8 @@ Resposta:
 "Percepções:
 - Frutas, Verduras e Legumes teve o maior índice de desperdício (D9 = 0,34) em junho de 2026, e 81% dos
   itens da categoria vencem em até 7 dias; pode valer avaliar ações de giro rápido para perecíveis.
-- O estoque abaixo do mínimo (D6) subiu de 17,6% em maio para 20,6% em junho de 2026, passando da meta
-  de 20%; um ponto de atenção é a reposição de itens básicos como arroz e molho de tomate.
+- O estoque abaixo do mínimo (D6) subiu de 27,6% em maio para 30,6% em junho de 2026, passando da meta
+  de 30%; um ponto de atenção é a reposição de itens básicos como arroz e molho de tomate.
 
 Tendência para o próximo mês (estimativa):
 - Taxa de desperdício (D1): provável queda, pois caiu em abril (15,8%), maio (15,0%) e junho (14,1%) de 2026.
