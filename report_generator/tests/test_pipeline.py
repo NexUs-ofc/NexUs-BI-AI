@@ -20,7 +20,7 @@ def test_pipeline_without_ai_uses_history(db):
     assert report["qualidade"]["numeros_sem_fonte"] == []
     d1 = report["dados"]["kpis"]["D1"]
     assert d1["mes_anterior"] == mongo.find_report(2026, 9)["dados"]["kpis"]["D1"]["valor"]
-    assert mongo.find_report(2026, 10)["status"] == "rascunho"
+    assert mongo.find_report(2026, 10)["status"] == "publicado"
     assert "Outubro de 2026" in render_html(report)
 
 

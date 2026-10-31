@@ -18,11 +18,7 @@ def fake(monkeypatch):
 
     def run(ano, mes, use_ai=True, with_pdf=True, model=None):
         state["runs"].append((ano, mes, use_ai))
-        state["reports"][(ano, mes)] = {"ano": ano, "mes": mes, "status": "rascunho"}
-
-    def set_status(ano, mes, status):
-        state["reports"][(ano, mes)]["status"] = status
-        return True
+        state["reports"][(ano, mes)] = {"ano": ano, "mes": mes, "status": "publicado"}
 
     def set_job(ano, mes, status, erro=None):
         state["jobs"][(ano, mes)] = {"status": status, "erro": erro}
@@ -31,10 +27,8 @@ def fake(monkeypatch):
     monkeypatch.setattr(scheduler.mongo, "find_report", lambda a, m: state["reports"].get((a, m)))
     monkeypatch.setattr(scheduler.mongo, "find_job", lambda a, m: state["jobs"].get((a, m)))
     monkeypatch.setattr(scheduler.mongo, "set_job", set_job)
-    monkeypatch.setattr(scheduler.mongo, "set_status", set_status)
     monkeypatch.setattr(scheduler, "SCHEDULE_DAY", 1)
     monkeypatch.setattr(scheduler, "SCHEDULE_HOUR", 3)
-    monkeypatch.setattr(scheduler, "AUTO_PUBLISH", False)
     return state
 
 
@@ -55,20 +49,14 @@ def test_generates_previous_month_with_ai_once(fake):
     assert result["acao"] == "gerado" and (result["ano"], result["mes"]) == (2026, 10)
     assert fake["runs"] == [(2026, 10, True)]
     assert fake["jobs"][(2026, 10)]["status"] == "concluido"
-    assert fake["reports"][(2026, 10)]["status"] == "rascunho"
+    assert fake["reports"][(2026, 10)]["status"] == "publicado"
 
-    # Já existe: não refaz (não volta um relatório publicado para rascunho)
+    # Já existe: não refaz (não refaz sem necessidade)
     again = scheduler.generate_previous_month(brt(2026, 11, 1, 4))
     assert again["acao"] == "ignorado" and len(fake["runs"]) == 1
     # force=True refaz
     scheduler.generate_previous_month(brt(2026, 11, 1, 4), force=True)
     assert len(fake["runs"]) == 2
-
-
-def test_auto_publish(fake, monkeypatch):
-    monkeypatch.setattr(scheduler, "AUTO_PUBLISH", True)
-    scheduler.generate_previous_month(brt(2026, 11, 2))
-    assert fake["reports"][(2026, 10)]["status"] == "publicado"
 
 
 def test_skips_when_already_running(fake):

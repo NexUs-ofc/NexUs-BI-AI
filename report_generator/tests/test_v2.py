@@ -84,9 +84,8 @@ def test_com_despensa_mostra_as_tres_visoes(make_report):
     assert "2 de 5" in html  # "X de Y avaliados fora da meta"
 
 
-def test_regerar_mantem_publicado_e_pdf(make_report, db):
+def test_regerar_mantem_o_pdf(make_report, db):
     make_report(True)
-    mongo.set_status(2026, 10, "publicado")
     mongo.set_pdf(2026, 10, "supabase://relatorio/relatorios/2026/10.pdf")
     again = make_report(True)
     saved = mongo.find_report(2026, 10)
@@ -130,7 +129,6 @@ def fake(monkeypatch):
     monkeypatch.setattr(scheduler.mongo, "set_job", lambda a, m, s, erro=None: state["jobs"].__setitem__(
         (a, m), {"status": s, "erro": erro, "atualizado_em": datetime.now(UTC)}))
     monkeypatch.setattr(scheduler, "SCHEDULE_HOUR", 8)
-    monkeypatch.setattr(scheduler, "AUTO_PUBLISH", False)
     return state
 
 
@@ -213,3 +211,30 @@ def test_charts_trazem_media_movel_e_atraso_do_descarte(make_report):
     payload = charts_payload(make_report(True))
     assert all("mediaMovel3m" in p for p in payload["evolucao"])
     assert payload["atrasoDescarte"]["porCategoria"] and payload["atrasoDescarte"]["faixas"]
+
+
+def test_lista_todos_os_pdfs_do_bucket(monkeypatch):
+    def handler(request):
+        prefix = __import__("json").loads(request.content)["prefix"]
+        if prefix == "relatorios":
+            return httpx.Response(200, json=[{"name": "2025", "id": None}, {"name": "2026", "id": None}])
+        if prefix == "relatorios/2025":
+            return httpx.Response(200, json=[{"name": "12.pdf", "id": "a"}])
+        return httpx.Response(200, json=[{"name": "09.pdf", "id": "b"}, {"name": "10.pdf", "id": "c"},
+                                         {"name": ".emptyFolderPlaceholder", "id": "d"}])
+
+    monkeypatch.setattr(files.httpx, "post", httpx.Client(transport=httpx.MockTransport(handler)).post)
+    monkeypatch.setattr(files, "SUPABASE_URL", "https://proj.supabase.co")
+    pdfs = files.list_pdfs()
+    assert sorted(pdfs) == [(2025, 12), (2026, 9), (2026, 10)]
+    assert pdfs[(2026, 10)].startswith("supabase://") and pdfs[(2026, 10)].endswith("relatorios/2026/10.pdf")
+
+
+def test_listagem_junta_mongo_e_bucket_sem_limite_de_meses():
+    from report_generator.reports_listing import group_by_month, merge_bucket
+
+    mongo_docs = [{"ano": 2026, "mes": 10, "status": "rascunho", "pdf": None}]
+    pdfs = {(2026, 10): "supabase://b/relatorios/2026/10.pdf", (2024, 3): "supabase://b/relatorios/2024/03.pdf"}
+    out = group_by_month(merge_bucket(mongo_docs, pdfs))
+    assert [g["id"] for g in out["meses"]] == ["2026-10", "2024-03"]  # tudo, do mais recente ao mais antigo
+    assert out["total"] == 2
