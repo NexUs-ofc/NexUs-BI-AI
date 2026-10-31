@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from langchain_core.callbacks import BaseCallbackHandler
 
 from app.config import LLM_MODEL
+from app.model.llm import is_quota_error
 from app.observability.cost import estimate_cost_usd
 from app.repository.metrics_repository import save_metric, save_tool_calls
 
@@ -98,11 +99,13 @@ def record_question(
         "route": route,
         "resolved": error is None and route in SPECIALIST_ROUTES and approved,
         "blocked": route == "blocked",
+        "output_blocked": bool(state.get("output_blocked")),
         "judge_rejected": error is None and route in SPECIALIST_ROUTES and not approved,
         "attempts": state.get("attempts", 0),
         "tool_calls": len(tool_calls),
         "error": error is not None,
         "error_type": type(error).__name__ if error else None,
+        "quota_error": is_quota_error(error),
         "latency_total_ms": round((time.perf_counter() - started) * 1000, 1),
         "latency_by_node_ms": _latency_by_node(state.get("timings", [])),
         "input_tokens": sum(u.get("input_tokens", 0) for u in usage_by_model.values()),

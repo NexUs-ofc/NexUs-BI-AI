@@ -20,10 +20,18 @@ def get_llm(temperature: float | None = None) -> ChatGoogleGenerativeAI:
     )
 
 
+def is_quota_error(error: Exception | None) -> bool:
+    """Gemini refused the call for quota or rate limit (HTTP 429)."""
+    if error is None:
+        return False
+    msg = str(error)
+    return "429" in msg or "RESOURCE_EXHAUSTED" in msg or "quota" in msg.lower()
+
+
 def explain_error(error: Exception) -> str:
     """Translate the most common Gemini API errors into a readable message."""
     msg = str(error)
-    if "429" in msg or "RESOURCE_EXHAUSTED" in msg or "quota" in msg.lower():
+    if is_quota_error(error):
         return f"Limite/cota da API atingido para o modelo '{LLM_MODEL}'. Espere um pouco ou troque LLM_MODEL no .env. Detalhe: {msg[:300]}"
     if "503" in msg or "UNAVAILABLE" in msg or "overloaded" in msg.lower():
         return f"Modelo '{LLM_MODEL}' sobrecarregado no momento. Tente de novo ou troque LLM_MODEL no .env. Detalhe: {msg[:300]}"

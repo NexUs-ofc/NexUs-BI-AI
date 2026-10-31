@@ -68,6 +68,7 @@ class ChatState(TypedDict, total=False):
     context: str        # source of truth used by the specialist (sent to the judge)
     attempts: int       # how many times the specialist ran
     approved: bool
+    output_blocked: bool  # the output guardrail replaced the answer
     steps: Annotated[list[str], operator.add]  # debug trace; each node appends to it
     timings: Annotated[list[dict], operator.add]  # how long each node took (filled by @timed)
 
@@ -140,7 +141,7 @@ def finish_node(state: ChatState) -> dict:
     history = get_session_history(state["session_id"])
     history.add_user_message(state["question"])
     history.add_ai_message(answer)
-    return {"answer": answer, "steps": [step]}
+    return {"answer": answer, "output_blocked": not guard.allowed, "steps": [step]}
 
 
 # ---------------------------------------------------------------- conditional edges
