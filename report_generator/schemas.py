@@ -200,7 +200,7 @@ class Arquivo(BaseModel):
 class Relatorio(BaseModel):
     ano: int
     mes: int
-    status: str = "rascunho"  # rascunho | publicado
+    status: str = "publicado"  # todo relatório nasce publicado (não há etapa de rascunho)
     versao_schema: int = SCHEMA_VERSION
     fonte_dados: str
     gerado_em: datetime

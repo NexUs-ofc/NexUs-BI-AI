@@ -77,10 +77,6 @@ def list_reports() -> list[dict]:
     return list(_reports().find({}, fields).sort([("ano", DESCENDING), ("mes", DESCENDING)]))
 
 
-def set_status(ano: int, mes: int, status: str) -> bool:
-    return _reports().update_one({"ano": ano, "mes": mes}, {"$set": {"status": status}}).matched_count > 0
-
-
 def set_pdf(ano: int, mes: int, uri: str) -> None:
     pdf = {"uri": uri, "gerado_em": datetime.now(UTC)}
     _reports().update_one({"ano": ano, "mes": mes}, {"$set": {"pdf": pdf}})
