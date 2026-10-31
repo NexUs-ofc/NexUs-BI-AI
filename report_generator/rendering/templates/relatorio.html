@@ -4,175 +4,329 @@
 <meta charset="utf-8">
 <title>NexUs BI · Relatório {{ periodo }}</title>
 <style>
-  @page { size: A4; margin: 18mm 16mm 20mm 16mm; }
+  @page { size: A4; margin: 15mm 14mm 17mm 14mm; }
   :root {
-    --ink: #1d232b; --muted: #5d6773; --line: #dfe3e8; --soft: #f4f6f8;
-    --brand: #1f6f5c; --ok: #1f7a4d; --bad: #b3261e; --warn: #9a6200;
+    /* Roxo do Ceris (mesma paleta do site). Verde/vermelho/âmbar só aparecem como status de meta. */
+    --ink: #1f1a2e; --muted: #6b6478; --line: #e8e3f1; --soft: #f8f6fc;
+    --brand: #4b1d7a; --brand-dark: #33115a; --brand-mid: #8b69b0; --brand-light: #cbbbe0; --brand-soft: #f1ecf8;
+    --gold: #b08a2e; --ok: #1f7a4a; --bad: #b3261e; --warn: #8a5a00;
   }
   * { box-sizing: border-box; }
   html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  body { margin: 0; color: var(--ink); font: 10.5pt/1.5 "Segoe UI", "Helvetica Neue", Arial, sans-serif; background: #fff; }
-  h1 { font-size: 21pt; line-height: 1.2; margin: 0 0 4pt; }
-  h2 { font-size: 13pt; color: var(--brand); margin: 18pt 0 8pt; padding-bottom: 4pt; border-bottom: 1.5pt solid var(--brand); break-after: avoid; }
-  h3 { font-size: 10.5pt; margin: 0 0 3pt; }
+  body { margin: 0; color: var(--ink); font: 10pt/1.5 "Segoe UI", "Helvetica Neue", Arial, sans-serif; background: #fff; }
+  h1 { font-size: 22pt; line-height: 1.15; margin: 4pt 0 4pt; font-weight: 700; }
+  h2 { font-size: 15pt; margin: 0 0 4pt; color: var(--brand-dark); }
+  h3 { font-size: 10pt; margin: 0 0 3pt; }
+  h4 { break-after: avoid; font-size: 8pt; margin: 11pt 0 5pt; text-transform: uppercase; letter-spacing: .08em; color: var(--brand); }
   p { margin: 0 0 6pt; }
   .muted { color: var(--muted); }
   .small { font-size: 8.5pt; }
+  .chart { display: block; }
+  .vista { break-before: page; }
+  .vista:first-of-type { break-before: auto; }
+  .vista-titulo { display: flex; align-items: baseline; gap: 10pt; border-bottom: 2pt solid var(--brand); padding-bottom: 5pt; margin-bottom: 9pt; }
+  .max { max-width: 340pt; }
+  .vista-titulo .sub { color: var(--muted); font-size: 9pt; }
 
-  header.capa { border-left: 5pt solid var(--brand); padding: 4pt 0 4pt 12pt; margin-bottom: 14pt; }
-  .eyebrow { text-transform: uppercase; letter-spacing: .08em; font-size: 8.5pt; color: var(--brand); font-weight: 600; }
-  .rascunho { display: inline-block; margin-left: 6pt; padding: 1pt 6pt; border: 1pt solid var(--warn); color: var(--warn); border-radius: 3pt; font-size: 8pt; }
-  .base { display: flex; gap: 18pt; margin-top: 6pt; }
-  .base b { display: block; font-size: 13pt; }
+  /* ------------------------------------------------ capa */
+  .capa { background: linear-gradient(135deg, var(--brand-dark), var(--brand) 60%, #6a3d9a); color: #fff; border-radius: 10pt; margin-bottom: 14pt; padding: 16pt 18pt 14pt; }
+  .eyebrow { text-transform: uppercase; letter-spacing: .1em; font-size: 8.5pt; font-weight: 600; opacity: .85; }
+  .selo { display: inline-block; margin-left: 6pt; padding: 1pt 7pt; border: 1pt solid rgba(255,255,255,.8); border-radius: 8pt; font-size: 7.5pt; letter-spacing: .04em; }
+  .capa .info { font-size: 8.5pt; opacity: .85; }
+  .topo { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8pt; margin-top: 12pt; }
+  .topo div { background: rgba(255,255,255,.13); border-radius: 8pt; padding: 8pt 10pt; }
+  .topo b { display: block; font-size: 17pt; line-height: 1.2; font-variant-numeric: tabular-nums; }
+  .topo span { font-size: 8.5pt; opacity: .88; }
+  .indice { display: flex; gap: 6pt; margin-bottom: 12pt; }
+  .indice span { font-size: 8.5pt; padding: 2pt 10pt; border-radius: 10pt; background: var(--brand-soft); color: var(--brand-dark); font-weight: 600; }
 
-  .resumo { background: var(--soft); border-radius: 4pt; padding: 10pt 12pt; }
+  .resumo { background: var(--brand-soft); border-left: 3pt solid var(--brand); border-radius: 0 8pt 8pt 0; padding: 10pt 14pt; margin-bottom: 4pt; }
 
-  .cards { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6pt; }
-  .card { border: 1pt solid var(--line); border-radius: 4pt; padding: 7pt 8pt; break-inside: avoid; }
-  .card .cod { font-size: 8pt; color: var(--muted); }
-  .card .nome { font-size: 8.5pt; font-weight: 600; min-height: 22pt; line-height: 1.25; }
-  .card .valor { font-size: 17pt; font-weight: 700; margin: 2pt 0; font-variant-numeric: tabular-nums; }
-  .card .meta { font-size: 8pt; color: var(--muted); }
-  .status { display: inline-block; font-size: 7.5pt; font-weight: 600; padding: 1pt 5pt; border-radius: 8pt; margin-top: 3pt; }
+  /* ------------------------------------------------ cards */
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7pt; }
+  .card { border: 1pt solid var(--line); background: #fff; border-radius: 9pt; padding: 9pt 11pt 8pt; break-inside: avoid; display: flex; flex-direction: column; }
+  .card .nome { font-size: 8.5pt; color: var(--muted); line-height: 1.25; min-height: 22pt; }
+  .card .valor { font-size: 20pt; font-weight: 700; margin: 2pt 0 4pt; font-variant-numeric: tabular-nums; line-height: 1.1; color: var(--brand-dark); }
+  .card .meta { font-size: 7.5pt; color: var(--muted); margin-top: 3pt; }
+  .card .delta { font-size: 7.5pt; color: var(--muted); }
+  .card .delta b.melhor { color: var(--ok); }
+  .card .delta b.pior { color: var(--bad); }
+  .status { align-self: flex-start; font-size: 7.5pt; font-weight: 600; padding: 1pt 7pt; border-radius: 8pt; margin-top: 5pt; }
+  .status::before { margin-right: 3pt; }
   .status.dentro_meta { background: #e3f3ea; color: var(--ok); }
+  .status.dentro_meta::before { content: "✓"; }
   .status.acima_da_meta { background: #fbe4e2; color: var(--bad); }
+  .status.acima_da_meta::before { content: "✕"; }
   .status.alerta { background: #fdf0d9; color: var(--warn); }
+  .status.alerta::before { content: "!"; font-weight: 800; }
   .status.sem_dados, .status.sem_meta { background: var(--soft); color: var(--muted); }
 
-  table { width: 100%; border-collapse: collapse; font-size: 9pt; font-variant-numeric: tabular-nums; }
+  .painel { border: 1pt solid var(--line); border-radius: 9pt; padding: 10pt 12pt; break-inside: avoid; margin-bottom: 8pt; }
+  .painel .sub { font-size: 8pt; color: var(--muted); margin-bottom: 8pt; }
+  .duas { display: grid; grid-template-columns: 1fr 1fr; gap: 8pt; }
+
+  /* ------------------------------------------------ tabelas */
+  table { width: 100%; border-collapse: collapse; font-size: 8.5pt; font-variant-numeric: tabular-nums; }
   thead { display: table-header-group; }
-  th { text-align: left; font-weight: 600; color: var(--muted); border-bottom: 1pt solid var(--ink); padding: 4pt 5pt; }
-  td { border-bottom: .5pt solid var(--line); padding: 3.5pt 5pt; }
+  th { text-align: left; white-space: nowrap; font-weight: 700; color: var(--brand-dark); font-size: 7.5pt; text-transform: uppercase; letter-spacing: .04em;
+       background: var(--brand-soft); border-bottom: 1pt solid var(--brand-light); padding: 5pt 6pt; }
+  td { border-bottom: .5pt solid var(--line); padding: 3.5pt 6pt; }
+  tbody tr:nth-child(even) td { background: var(--soft); }
   tr { break-inside: avoid; }
   td.num, th.num { text-align: right; }
   tr.suprimido td { color: var(--muted); font-style: italic; }
 
-  .kpi-bloco { margin-bottom: 8pt; break-inside: avoid; }
-  .insight { border-left: 3pt solid var(--line); padding: 2pt 0 2pt 9pt; margin-bottom: 8pt; break-inside: avoid; }
-  .insight.alerta { border-color: var(--bad); }
-  .insight.tendencia { border-color: var(--brand); }
-  .insight.destaque { border-color: var(--warn); }
-  .tag { font-size: 7.5pt; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .leitura { margin-bottom: 7pt; break-inside: avoid; padding-left: 9pt; border-left: 2pt solid var(--brand-light); }
+  .insights { display: grid; grid-template-columns: 1fr 1fr; gap: 8pt; }
+  .insight { border-radius: 9pt; padding: 8pt 11pt; break-inside: avoid; background: var(--brand-soft); border-top: 3pt solid var(--brand-mid); }
+  .insight.alerta { border-top-color: var(--bad); }
+  .insight.tendencia { border-top-color: var(--brand); }
+  .insight.destaque { border-top-color: var(--gold); }
+  .tag { font-size: 7pt; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; }
+
+  .acao { display: grid; grid-template-columns: 20pt 1fr; gap: 8pt; padding: 5pt 0; border-bottom: .5pt solid var(--line); break-inside: avoid; }
+  .acao .n { width: 18pt; height: 18pt; border-radius: 50%; background: var(--brand); color: #fff; font-weight: 700; font-size: 8.5pt; text-align: center; line-height: 18pt; }
+  .acao .ev { font-size: 8.5pt; color: var(--brand-dark); background: var(--brand-soft); border-radius: 6pt; padding: 3pt 8pt; margin-top: 3pt; display: inline-block; }
+  ol.recs { margin: 0; padding: 0; list-style: none; counter-reset: rec; }
+  ol.recs li { counter-increment: rec; position: relative; padding: 5pt 0 5pt 24pt; border-bottom: .5pt solid var(--line); break-inside: avoid; }
+  ol.recs li::before { content: counter(rec); position: absolute; left: 0; top: 5pt; width: 16pt; height: 16pt; border-radius: 50%;
+                       background: var(--brand-soft); color: var(--brand-dark); font-weight: 700; font-size: 8pt; text-align: center; line-height: 16pt; }
   ul { margin: 0; padding-left: 14pt; }
   li { margin-bottom: 3pt; }
-  .quebra { break-before: page; }
-  .duas { display: grid; grid-template-columns: 1fr 1fr; gap: 14pt; }
+  .aviso { background: var(--soft); border: 1pt dashed var(--brand-light); border-radius: 8pt; padding: 8pt 12pt; color: var(--muted); font-size: 9pt; }
 </style>
 </head>
 <body>
 {% set d = r.dados %}{% set n = r.narrativa %}
 
 <header class="capa">
-  <div class="eyebrow">NexUs BI · Relatório mensal
-    {% if r.status != "publicado" %}<span class="rascunho">RASCUNHO</span>{% endif %}
+  <div class="eyebrow">NexUs BI · {{ "Relatório do mês em andamento" if parcial else "Relatório mensal" }}
+    {% if parcial %}<span class="selo">PARCIAL</span>{% endif %}
+    {% if r.status != "publicado" %}<span class="selo">RASCUNHO</span>{% endif %}
   </div>
   <h1>Desperdício e validade nas despensas<br>{{ periodo|capitalize }}</h1>
-  <div class="muted small">Data de referência: {{ data_ref }} · Gerado em {{ gerado_em }} · Fonte: {{ r.fonte_dados }}</div>
-  <div class="base">
-    <div><b>{{ d.base.households|int_br }}</b><span class="muted small">households</span></div>
-    <div><b>{{ d.base.itens_na_despensa|int_br }}</b><span class="muted small">itens na despensa</span></div>
-    <div><b>{{ d.base.eventos_no_mes|int_br }}</b><span class="muted small">eventos no mês</span></div>
+  <div class="info">
+    {% if parcial %}Números até {{ data_ref_geral }} (o mês ainda não terminou) · {% endif %}Gerado em {{ gerado_em }}
+    {% if tem_despensa %}· Despensa: foto de {{ data_foto or data_ref }}{% else %}· Sem foto da despensa neste período{% endif %}
+  </div>
+  <div class="topo">
+    <div><b>{{ resumo.unidades_saidas|int_br }}</b><span>unidades que saíram da despensa</span></div>
+    <div><b>{{ resumo.unidades_descartadas|int_br }}</b><span>unidades descartadas</span></div>
+    <div><b>{{ resumo.casas_com_movimento|int_br }}</b><span>casas com movimento no mês</span></div>
+    <div><b>{{ fora_meta }} de {{ avaliados }}</b><span>indicadores avaliados fora da meta</span></div>
   </div>
 </header>
 
-<h2>1. Resumo executivo</h2>
-<div class="resumo"><p>{{ n.resumo_executivo }}</p></div>
-
-<h2>2. Indicadores do mês</h2>
-<div class="cards">
-  {% for code in card_kpis %}{% set k = d.kpis[code] %}
-  <div class="card">
-    <div class="cod">{{ k.codigo }}</div>
-    <div class="nome">{{ k.nome }}</div>
-    <div class="valor">{{ k.valor|pct }}</div>
-    <div class="meta">{{ "Alerta" if code == "D4" else "Meta" }}: até {{ k.meta|pct }}</div>
-    <div class="meta">vs. mês anterior: {{ k.variacao_pp|pp }}</div>
-    <span class="status {{ k.status }}">{{ status_label[k.status] }}</span>
-  </div>
-  {% endfor %}
+<div class="indice">
+  <span>1 · Visão geral</span><span>2 · Desperdício</span>{% if tem_despensa %}<span>3 · Despensa</span>{% endif %}
 </div>
-<p class="small muted" style="margin-top:6pt">
-  D7 · Vida útil no cadastro: mediana de {{ d.vida_util.mediana|int_br }} dias
-  (1º quartil {{ d.vida_util.p25|int_br }}, 3º quartil {{ d.vida_util.p75|int_br }}, {{ d.vida_util.outliers|int_br }} outliers
-  {%- if d.vida_util.mediana_mes_anterior is not none %}; mês anterior: {{ d.vida_util.mediana_mes_anterior|int_br }} dias{% endif %}).
-</p>
 
-<h2>3. Análise por indicador</h2>
-{% for a in n.analise_por_kpi %}
-<div class="kpi-bloco">
-  <h3>{{ a.kpi }} · {{ kpi_names.get(a.kpi, "") }}</h3>
-  <p>{{ a.texto }}</p>
-</div>
-{% endfor %}
+{# ================================================================== 1 · VISÃO GERAL #}
+<section class="vista">
+  <div class="vista-titulo"><h2>1 · Visão geral</h2><span class="sub">O mês em poucos números</span></div>
+  <div class="resumo"><p>{{ n.resumo_executivo }}</p></div>
 
-<h2>4. Ranking de vencimento por UF (D3 e D5)</h2>
-<table>
-  <thead><tr><th>Rank D5</th><th>UF</th><th class="num">Households</th><th class="num">Itens c/ validade</th>
-    <th class="num">Vencidos</th><th class="num">A vencer 30d</th><th class="num">D3 % vencidos</th></tr></thead>
-  <tbody>
-  {% for u in d.por_uf %}
-    {% if u.suprimido %}
-    <tr class="suprimido"><td>—</td><td>{{ u.uf }}</td><td class="num">{{ u.households }}</td><td colspan="4">dados insuficientes (privacidade)</td></tr>
-    {% else %}
-    <tr><td>{{ u.d5_rank }}º</td><td>{{ u.uf }}</td><td class="num">{{ u.households|int_br }}</td><td class="num">{{ u.itens_com_validade|int_br }}</td>
-      <td class="num">{{ u.vencidos|int_br }}</td><td class="num">{{ u.a_vencer_30d|int_br }}</td><td class="num">{{ u.d3_pct_vencidos|pct }}</td></tr>
+  <h4>Indicadores do mês</h4>
+  <div class="cards">
+    {% for code in card_kpis %}{% set k = d.kpis[code] %}
+    <div class="card">
+      <div class="nome">{{ k.nome }}</div>
+      <div class="valor">{{ k.valor|pct }}</div>
+      {{ charts.meters[code]|safe }}
+      <div class="meta">{{ "Alerta acima de" if code == "D4" else "Meta: até" }} {{ k.meta|pct }}</div>
+      <div class="delta">vs. mês anterior:
+        <b class="{{ 'melhor' if (k.variacao_pp or 0) < 0 else ('pior' if (k.variacao_pp or 0) > 0 else '') }}">{{ k.variacao_pp|pp }}</b></div>
+      <span class="status {{ k.status }}">{{ status_label[k.status] }}</span>
+    </div>
+    {% endfor %}
+    {% if d.kpis.D2 and d.kpis.D2.valor is not none %}{% set k = d.kpis.D2 %}
+    <div class="card">
+      <div class="nome">{{ k.nome }}</div>
+      <div class="valor">{{ k.valor|pct }}</div>
+      <div class="meta">das unidades descartadas com validade foram descartadas mais de 7 dias depois de vencer</div>
+      <div class="delta">vs. mês anterior: <b class="{{ 'melhor' if (k.variacao_pp or 0) < 0 else ('pior' if (k.variacao_pp or 0) > 0 else '') }}">{{ k.variacao_pp|pp }}</b></div>
+    </div>
     {% endif %}
-  {% endfor %}
-  </tbody>
-</table>
-
-<h2>5. Categorias de alimentos (D4, D7 e D9)</h2>
-<table>
-  <thead><tr><th>Categoria</th><th class="num">Households</th><th class="num">D4 % a vencer 7d</th>
-    <th class="num">Expirados no mês</th><th class="num">D9 índice</th><th class="num">D7 mediana (dias)</th></tr></thead>
-  <tbody>
-  {% for c in d.por_categoria %}
-    <tr><td>{{ c.categoria }}</td><td class="num">{{ c.households_com_categoria|int_br }}</td><td class="num">{{ c.d4_pct_a_vencer_7d|pct }}</td>
-      <td class="num">{{ c.expirados_no_mes|int_br }}</td><td class="num">{{ c.d9_indice_desperdicio|dec2 }}</td><td class="num">{{ c.d7_mediana_dias|int_br }}</td></tr>
-  {% endfor %}
-  </tbody>
-</table>
-
-<h2>6. Alimentos mais abaixo do estoque mínimo (D6)</h2>
-{% if d.top_abaixo_minimo %}
-<table>
-  <thead><tr><th>#</th><th>Alimento</th><th>Categoria</th><th class="num">Households abaixo do mínimo</th></tr></thead>
-  <tbody>
-  {% for a in d.top_abaixo_minimo %}
-    <tr><td>{{ loop.index }}</td><td>{{ a.alimento }}</td><td>{{ a.categoria }}</td><td class="num">{{ a.households|int_br }}</td></tr>
-  {% endfor %}
-  </tbody>
-</table>
-{% else %}<p class="muted">Nenhum alimento abaixo do mínimo no mês.</p>{% endif %}
-
-<h2>7. Insights</h2>
-{% for i in n.insights %}
-<div class="insight {{ i.tipo }}">
-  <div class="tag">{{ i.tipo }}{% if i.kpis %} · {{ i.kpis|join(", ") }}{% endif %}</div>
-  <h3>{{ i.titulo }}</h3>
-  <p>{{ i.texto }}</p>
-</div>
-{% endfor %}
-
-<h2>8. Recomendações</h2>
-<ul>{% for rec in n.recomendacoes %}<li>{{ rec }}</li>{% endfor %}</ul>
-
-<h2>9. Metodologia e limitações</h2>
-<div class="duas">
-  <div>
-    <h3>Fórmulas</h3>
-    <table class="small">
-      <tbody>{% for code, k in kpi_defs.items() %}<tr><td><b>{{ code }}</b></td><td>{{ k.nome }}<br><span class="muted">{{ k.formula }}</span></td></tr>{% endfor %}</tbody>
-    </table>
   </div>
-  <div>
-    <h3>Limitações</h3>
-    <ul class="small">
-      {% for l in n.limitacoes %}<li>{{ l }}</li>{% endfor %}
-      <li>Dados agregados; UFs com menos de {{ min_households }} households não exibem números.</li>
-      <li>Números calculados por código; os textos foram escritos {{ "por IA a partir desses números" if r.gerado_com_ia else "por regras automáticas" }}.</li>
-    </ul>
+  <p class="small muted" style="margin-top:5pt">A barra mostra o valor do mês e o traço dourado marca a meta. Em todos os indicadores, quanto menor, melhor.</p>
+
+  {% if charts.evolucao %}
+  <div class="painel" style="margin-top:8pt">
+    <h3>Evolução nos últimos meses</h3>
+    <div class="sub">Taxa de desperdício e descarte por esquecimento mês a mês.</div>
+    {{ charts.evolucao|safe }}
   </div>
-</div>
+  {% endif %}
+
+  {% if n.insights %}
+  <h4>O que os números dizem</h4>
+  <div class="insights">
+  {% for i in n.insights %}
+    <div class="insight {{ i.tipo }}">
+      <div class="tag">{{ {"alerta": "Alerta", "tendencia": "Tendência", "destaque": "Destaque"}.get(i.tipo, i.tipo) }}</div>
+      <h3>{{ i.titulo }}</h3>
+      <p>{{ i.texto }}</p>
+    </div>
+  {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if r.acoes_app %}
+  <h4>O que o app pode fazer agora</h4>
+  <div>
+  {% for a in r.acoes_app[:4] %}
+    <div class="acao"><div class="n">{{ loop.index }}</div>
+      <div><h3>{{ a.titulo }}</h3><p style="margin-bottom:2pt">{{ a.texto }}</p><span class="ev">{{ a.evidencia }}</span></div></div>
+  {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if n.recomendacoes %}
+  <h4>Recomendações para o negócio</h4>
+  <ol class="recs">{% for rec in n.recomendacoes %}<li>{{ rec }}</li>{% endfor %}</ol>
+  {% endif %}
+</section>
+
+{# ================================================================== 2 · DESPERDÍCIO #}
+<section class="vista">
+  <div class="vista-titulo"><h2>2 · Desperdício</h2><span class="sub">O que foi consumido e o que foi para o lixo no mês</span></div>
+
+  {% for a in n.analise_por_kpi if a.kpi in evento_codes %}
+  <div class="leitura"><h3>{{ kpi_names.get(a.kpi, "") }}</h3><p>{{ a.texto }}</p></div>
+  {% endfor %}
+
+  <h4>Por categoria</h4>
+  {% if d.desperdicio_categoria %}
+  <div class="duas">
+    <div class="painel">
+      <h3>Quem mais desperdiça</h3>
+      <div class="sub">Unidades descartadas por casa que movimentou a categoria no mês, e a parte do total descartado.</div>
+      {{ charts.cat_waste|safe }}
+    </div>
+    <div>
+      <table>
+        <thead><tr><th>Categoria</th><th class="num">Descartadas</th><th class="num">Saíram</th><th class="num">Casas</th><th class="num">Por casa</th></tr></thead>
+        <tbody>
+        {% for c in d.desperdicio_categoria[:10] %}
+          <tr><td>{{ c.categoria }}</td><td class="num">{{ c.unidades_descartadas|int_br }}</td><td class="num">{{ c.unidades_saidas|int_br }}</td>
+              <td class="num">{{ c.casas|int_br }}</td><td class="num">{{ c.d9_indice|dec2 }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% else %}<p class="aviso">Sem consumo ou descarte registrado por categoria neste período.</p>{% endif %}
+
+  <h4>Por região e momento do descarte</h4>
+  <div class="duas">
+    <div class="painel">
+      <h3>Taxa de desperdício por região</h3>
+      <div class="sub">Unidades descartadas ÷ unidades que saíram, em cada região.</div>
+      {% if d.desperdicio_regiao %}{{ charts.regioes|safe }}
+      <table style="margin-top:6pt">
+        <thead><tr><th>Região</th><th class="num">Desperdício</th><th class="num">Esquecimento</th></tr></thead>
+        <tbody>{% for g in d.desperdicio_regiao %}<tr><td>{{ g.regiao }}</td><td class="num">{{ g.d1_pct|pct }}</td><td class="num">{{ g.d2_pct|pct }}</td></tr>{% endfor %}</tbody>
+      </table>
+      {% else %}<p class="muted">Sem dados por região.</p>{% endif %}
+    </div>
+    <div class="painel">
+      <h3>Quando o alimento foi descartado</h3>
+      <div class="sub">Em relação à validade. Descartar depois de vencer é sinal de alimento esquecido.</div>
+      {% if d.momento_descarte %}{{ charts.momento|safe }}{% else %}<p class="muted">Sem descartes registrados.</p>{% endif %}
+    </div>
+  </div>
+</section>
+
+{# ================================================================== 3 · DESPENSA (só quando há foto) #}
+{% if tem_despensa %}
+<section class="vista">
+  <div class="vista-titulo"><h2>3 · Despensa</h2><span class="sub">Foto do estoque em {{ data_foto or data_ref }}</span></div>
+
+  {% for a in n.analise_por_kpi if a.kpi in estado_codes %}
+  <div class="leitura"><h3>{{ kpi_names.get(a.kpi, "") }}</h3><p>{{ a.texto }}</p></div>
+  {% endfor %}
+
+  {% if d.por_uf %}
+  <h4>Risco de vencimento por estado</h4>
+  <div class="painel">
+    <h3>Unidades vencidas e a vencer em 30 dias</h3>
+    <div class="sub">Do estado mais crítico (1º) ao menos crítico, pelo % das unidades em risco.</div>
+    {{ charts.uf|safe }}
+  </div>
+  <table>
+    <thead><tr><th>Posição</th><th>Estado</th><th class="num">Unidades com validade</th><th class="num">Vencidas</th>
+      <th class="num">A vencer em 30 dias</th><th class="num">% em risco</th><th class="num">% vencidas</th></tr></thead>
+    <tbody>
+    {% for u in d.por_uf %}
+      {% if u.suprimido %}
+      <tr class="suprimido"><td>—</td><td>{{ u.uf }}</td><td colspan="5">dados insuficientes (privacidade)</td></tr>
+      {% else %}
+      <tr><td>{{ u.d5_rank }}º</td><td>{{ u.uf }}</td><td class="num">{{ u.itens_com_validade|int_br }}</td>
+        <td class="num">{{ u.vencidos|int_br }}</td><td class="num">{{ u.a_vencer_30d|int_br }}</td><td class="num">{{ u.d5_pct_em_risco|pct }}</td><td class="num">{{ u.d3_pct_vencidos|pct }}</td></tr>
+      {% endif %}
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  <h4>Categorias, validade e reposição</h4>
+  <div class="duas">
+    <div class="painel">
+      <h3>Itens que vencem em 7 dias, por categoria</h3>
+      <div class="sub">Parcela das unidades com validade que vencem na semana (8 maiores).</div>
+      {% if charts.cat_d4 %}{{ charts.cat_d4|safe }}{% else %}<p class="muted">Sem dados por categoria.</p>{% endif %}
+    </div>
+    <div class="painel">
+      <h3>Prazo de validade cadastrado</h3>
+      <div class="sub">Dias entre a entrada do item e a validade: a caixa vai do 1º ao 3º quartil.
+        {%- if d.vida_util.mediana_mes_anterior is not none %} Mediana do mês anterior: {{ d.vida_util.mediana_mes_anterior|int_br }} dias.{% endif %}</div>
+      {% if charts.vida %}{{ charts.vida|safe }}
+      <p class="small muted" style="margin-top:6pt">{{ d.vida_util.itens|int_br }} lotes com validade · média de {{ d.vida_util.media|int_br }} dias{% if d.vida_util.outliers is not none %} · {{ d.vida_util.outliers|int_br }} fora do padrão{% endif %}.</p>
+      {% else %}<p class="muted">Sem dados de validade.</p>{% endif %}
+    </div>
+  </div>
+  <div class="painel">
+    <h3>Alimentos mais abaixo do estoque mínimo</h3>
+    <div class="sub">Número de casas abaixo do mínimo que configuraram.</div>
+    {% if d.top_abaixo_minimo %}
+    <div class="duas">
+      <div>{{ charts.top_min|safe }}</div>
+      <table>
+        <thead><tr><th>Alimento</th><th>Categoria</th><th class="num">Casas</th></tr></thead>
+        <tbody>{% for a in d.top_abaixo_minimo %}<tr><td>{{ a.alimento }}</td><td>{{ a.categoria }}</td><td class="num">{{ a.households|int_br }}</td></tr>{% endfor %}</tbody>
+      </table>
+    </div>
+    {% else %}<p class="muted">Nenhuma casa abaixo do mínimo neste período.</p>{% endif %}
+  </div>
+</section>
+{% endif %}
+
+{# ================================================================== METODOLOGIA #}
+<section class="vista">
+  <div class="vista-titulo"><h2>Como os números são calculados</h2><span class="sub">Metodologia e limitações</span></div>
+  <div class="duas">
+    <div>
+      <table class="small">
+        <tbody>
+        {% for code, k in kpi_defs.items() if (tem_despensa or code in evento_codes) %}
+          <tr><td><b>{{ k.nome }}</b><br><span class="muted">{{ k.formula }}</span></td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div>
+      <h3>Limitações</h3>
+      <ul class="small">
+        {% for l in n.limitacoes %}<li>{{ l }}</li>{% endfor %}
+        {% set lim = n.limitacoes|join(" ")|lower %}
+        {% if parcial and "andamento" not in lim %}<li>Mês em andamento: os números mudam a cada atualização diária.</li>{% endif %}
+        {% if not tem_despensa and "despensa" not in lim %}<li>Este período não tem foto da despensa; a visão Despensa não foi incluída.</li>{% endif %}
+        <li>"Unidades" são embalagens; a base não registra peso nem preço.</li>
+        <li>Dados agregados; estados com menos de {{ min_households }} casas não exibem números.</li>
+        <li>Números calculados por código; os textos foram escritos {{ "por IA a partir desses números" if r.gerado_com_ia else "por regras automáticas" }}.</li>
+      </ul>
+    </div>
+  </div>
+</section>
 </body>
 </html>
