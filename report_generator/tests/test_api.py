@@ -33,7 +33,7 @@ def test_auth_required(client):
     assert client.get("/dashboard").status_code == 401
 
 
-def test_generate_publish_flow(client):
+def test_generate_flow(client):
     admin, company = _headers("ADMIN"), _headers("COMPANY")
     assert client.post("/reports/2026/10/generate?sem_ia=true", headers=company).status_code == 403
 
@@ -41,12 +41,10 @@ def test_generate_publish_flow(client):
     assert r.status_code == 202  # TestClient roda a tarefa em segundo plano antes de devolver
     assert client.get("/reports/2026/10/status", headers=admin).json()["status"] == "concluido"
 
-    # rascunho: só o admin vê
-    assert client.get("/reports/2026/10", headers=company).status_code == 404
-    assert client.get("/reports/2026/10", headers=admin).json()["status"] == "rascunho"
-    assert client.get("/reports", headers=company).json() == {"total": 0, "meses": []}
-
-    assert client.post("/reports/2026/10/publish", headers=admin).status_code == 200
+    # já nasce publicado: a empresa vê na hora e não existe endpoint de publicar
+    assert client.get("/reports/2026/10", headers=company).json()["status"] == "publicado"
+    assert client.get("/reports", headers=company).json()["total"] == 1
+    assert client.post("/reports/2026/10/publish", headers=admin).status_code in (404, 405)
     pdf = client.get("/reports/2026/10/pdf", headers=company)
     assert pdf.status_code == 200 and pdf.content == b"%PDF-teste"
     assert pdf.headers["content-disposition"].startswith("inline")
@@ -61,7 +59,6 @@ def test_reports_grouped_by_month(client, db, monkeypatch):
     admin = _headers("ADMIN")
     for mes in (8, 9, 10):
         client.post(f"/reports/2026/{mes}/generate?sem_ia=true", headers=admin)
-        client.post(f"/reports/2026/{mes}/publish", headers=admin)
 
     body = client.get("/reports", headers=_headers("COMPANY")).json()
     assert body["total"] == 3
@@ -70,8 +67,30 @@ def test_reports_grouped_by_month(client, db, monkeypatch):
     assert item["data"] == "2026-09-30" and item["pdf"] == "/reports/2026/9/pdf"
     assert item["download"] == "/reports/2026/9/pdf?download=true"
 
-    assert client.get("/reports?meses=2", headers=admin).json()["total"] == 2  # setembro e outubro
+    assert client.get("/reports?meses=2", headers=admin).json()["total"] == 3  # `meses` não limita mais
+    assert client.get("/reports?mes=9", headers=admin).json()["total"] == 1
+    assert client.get("/reports?ano=2025", headers=admin).json()["total"] == 0
     assert client.get("/reports?busca=setembro", headers=admin).json()["meses"][0]["mes"] == 9
+
+
+def test_lista_do_bucket_sem_nada_no_mongo(client, monkeypatch):
+    from report_generator.storage import files
+
+    monkeypatch.setattr(files, "list_pdfs", lambda: {(2026, 9): "supabase://relatorio/relatorios/2026/09.pdf",
+                                                      (2026, 10): "supabase://relatorio/relatorios/2026/10.pdf"})
+    body = client.get("/reports", headers=_headers("COMPANY")).json()
+    assert [g["id"] for g in body["meses"]] == ["2026-10", "2026-09"] and "avisos" not in body
+    item = body["meses"][0]["relatorios"][0]
+    # formato que o front valida (validateReports.ts)
+    assert item["id"] == "2026-10" and item["data"] == "2026-10-31" and item["status"] == "publicado"
+    assert item["tipo"] == "Mensal" and item["pdf"] == "/reports/2026/10/pdf"
+
+    def boom():
+        raise RuntimeError("Supabase Storage: falha ao listar relatorios (401): Invalid key")
+
+    monkeypatch.setattr(files, "list_pdfs", boom)
+    body = client.get("/reports", headers=_headers("COMPANY")).json()
+    assert body["total"] == 0 and "Invalid key" in body["avisos"][0]
 
 
 def test_dashboard(client):
@@ -129,7 +148,6 @@ def test_removed_endpoints_are_gone(client):
 def test_charts_and_pdf_url(client, monkeypatch):
     admin, company = _headers("ADMIN"), _headers("COMPANY")
     client.post("/reports/2026/10/generate?sem_ia=true", headers=admin)
-    client.post("/reports/2026/10/publish", headers=admin)
 
     charts = client.get("/reports/2026/10/charts", headers=company).json()
     assert {"periodo", "disponivel", "resumo", "kpis", "evolucao", "categorias", "regioes", "momentoDescarte",

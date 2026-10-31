@@ -2,7 +2,7 @@
 
     python -m uvicorn report_generator.api:app --reload --port 8001   ->  http://localhost:8001/docs
 
-Leitura (COMPANY e ADMIN; empresas só enxergam relatórios publicados):
+Leitura (COMPANY e ADMIN; todo relatório gerado já é publicado):
     GET  /dashboard                     dados das visualizações do Dashboard (Gold do Databricks ou mock)
     GET  /reports                       PDFs agrupados por mês (tela Relatórios)
     GET  /reports/{ano}/{mes}           JSON completo do relatório
@@ -12,7 +12,6 @@ Leitura (COMPANY e ADMIN; empresas só enxergam relatórios publicados):
 Escrita (ADMIN):
     POST /reports/{ano}/{mes}/generate  gera em segundo plano (202); acompanhe em .../status
     GET  /reports/{ano}/{mes}/status
-    POST /reports/{ano}/{mes}/publish
 
 A geração automática do mês anterior roda dentro da API (scheduler.py).
 """
@@ -49,7 +48,7 @@ from report_generator.config import (
     validate_config,
 )
 from report_generator.data.loader import load_dashboard
-from report_generator.reports_listing import group_by_month
+from report_generator.reports_listing import group_by_month, merge_bucket
 from report_generator.storage import files, mongo
 
 log = logging.getLogger("report_generator")
@@ -96,7 +95,7 @@ def _is_admin(user: CurrentUser) -> bool:
 
 def _get_visible(ano: int, mes: int, user: CurrentUser) -> dict:
     report = mongo.find_report(ano, mes)
-    if not report or (report.get("status") != "publicado" and not _is_admin(user)):
+    if not report:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Relatório de {mes:02d}/{ano} não encontrado.")
     return report
 
@@ -152,14 +151,26 @@ def dashboard(
 @app.get("/reports")
 def list_reports(
     user: Reader,
-    meses: Annotated[int, Query(ge=1, le=60, description="últimos N meses")] = 6,
-    busca: Annotated[str | None, Query(max_length=100, description="filtra pelo título")] = None,
+    ano: Annotated[int | None, Query(ge=2000, le=2100, description="filtra pelo ano")] = None,
+    mes: Annotated[int | None, Query(ge=1, le=12, description="filtra pelo mês (1 a 12)")] = None,
+    busca: Annotated[str | None, Query(max_length=100, description="filtra pelo nome")] = None,
+    meses: Annotated[int | None, Query(ge=1, le=600, description="obsoleto: ignorado, a lista traz todos")] = None,
 ) -> dict:
-    """Relatórios com PDF, agrupados por mês (do mais recente para o mais antigo)."""
-    reports = mongo.list_reports()
-    if not _is_admin(user):
-        reports = [r for r in reports if r.get("status") == "publicado"]
-    return group_by_month(reports, meses=meses, busca=busca)
+    """TODOS os relatórios com PDF, agrupados por mês (do mais recente para o mais antigo).
+    Filtros: `ano`, `mes` e `busca` (nome). `meses` é aceito só por compatibilidade e não limita nada."""
+    avisos = []
+    try:
+        reports = mongo.list_reports()
+    except Exception as error:
+        log.warning("Listagem de relatórios sem Mongo: usando só o bucket", exc_info=True)
+        reports, avisos = [], [*avisos, f"Mongo indisponível: {type(error).__name__}"]
+    try:
+        reports = merge_bucket(reports, files.list_pdfs())
+    except Exception as error:
+        log.exception("Não foi possível listar o bucket de PDFs")
+        avisos.append(f"Bucket de PDFs indisponível: {error}"[:300])
+    result = group_by_month(reports, ano=ano, mes=mes, busca=busca)
+    return {**result, "avisos": avisos} if avisos else result
 
 
 @app.post("/reports/{ano}/{mes}/generate", status_code=status.HTTP_202_ACCEPTED)
@@ -191,14 +202,29 @@ def get_report_charts(ano: Ano, mes: Mes, user: Reader) -> dict:
     return charts_payload(_get_visible(ano, mes, user))
 
 
+def _pdf_uri(ano: int, mes: int, user: CurrentUser) -> str:
+    """URI do PDF: a do Mongo e, se o relatório não está lá, a do próprio bucket (o PDF existe, então serve)."""
+    try:
+        report = _get_visible(ano, mes, user)
+        if report.get("pdf"):
+            return report["pdf"]["uri"]
+    except HTTPException:
+        pass
+    try:
+        uri = files.list_pdfs().get((ano, mes))
+    except Exception:
+        log.warning("Falha ao consultar o bucket de PDFs", exc_info=True)
+        uri = None
+    if not uri:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Este relatório ainda não tem PDF.")
+    return uri
+
+
 @app.get("/reports/{ano}/{mes}/pdf")
 def get_report_pdf(ano: Ano, mes: Mes, user: Reader,
                    download: Annotated[bool, Query(description="true = baixar; false = abrir no navegador")] = False
                    ) -> Response:
-    report = _get_visible(ano, mes, user)
-    if not report.get("pdf"):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Este relatório ainda não tem PDF.")
-    content = files.load_pdf(report["pdf"]["uri"])
+    content = files.load_pdf(_pdf_uri(ano, mes, user))
     disposition = "attachment" if download else "inline"
     headers = {"Content-Disposition": f'{disposition}; filename="nexus-bi-{ano}-{mes:02d}.pdf"'}
     return Response(content, media_type="application/pdf", headers=headers)
@@ -209,11 +235,9 @@ def get_report_pdf_url(ano: Ano, mes: Mes, user: Reader) -> dict:
     """URL assinada e temporária do PDF no bucket privado do Supabase: o site abre (iframe, nova aba ou
     download) direto do Storage, sem a service role key e sem passar os bytes pela API. Sem Supabase
     configurado (desenvolvimento) devolve o caminho da própria API."""
-    report = _get_visible(ano, mes, user)
-    if not report.get("pdf"):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Este relatório ainda não tem PDF.")
+    uri = _pdf_uri(ano, mes, user)
     try:
-        url = files.signed_url(report["pdf"]["uri"], SIGNED_URL_SECONDS)
+        url = files.signed_url(uri, SIGNED_URL_SECONDS)
     except RuntimeError as error:
         log.error("Falha ao assinar o PDF de %02d/%d: %s", mes, ano, error)
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Não foi possível gerar o link do PDF agora.") from error
@@ -221,8 +245,4 @@ def get_report_pdf_url(ano: Ano, mes: Mes, user: Reader) -> dict:
             "origem": "supabase" if url else "api"}
 
 
-@app.post("/reports/{ano}/{mes}/publish")
-def publish(ano: Ano, mes: Mes, _user: Writer) -> dict:
-    if not mongo.set_status(ano, mes, "publicado"):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, f"Relatório de {mes:02d}/{ano} não encontrado.")
-    return {"ano": ano, "mes": mes, "status": "publicado"}
+
