@@ -2,7 +2,7 @@
 
 - get_llm: Gemini.
 - build_agent: create_agent do LangChain 1.x com limites de chamadas (protege contra loop e custo).
-- run_agent / final_text / structured_output / tool_outputs: executam e leem o resultado.
+- arun_agent / final_text / structured_output / tool_outputs: executam (assíncrono) e leem o resultado.
 """
 from langchain.agents import create_agent
 from langchain.agents.middleware import (
@@ -10,7 +10,7 @@ from langchain.agents.middleware import (
     ToolCallLimitMiddleware,
 )
 from langchain.agents.structured_output import ToolStrategy
-from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.messages import HumanMessage, ToolMessage
 
 from report_generator.config import GOOGLE_API_KEY, LLM_MODEL, LLM_TEMPERATURE
 
@@ -50,8 +50,8 @@ def build_agent(system_prompt: str, tools=None, response_format=None, model=None
     )
 
 
-def run_agent(agent, message: str) -> dict:
-    return agent.invoke({"messages": [HumanMessage(content=message)]})
+async def arun_agent(agent, message: str) -> dict:
+    return await agent.ainvoke({"messages": [HumanMessage(content=message)]})
 
 
 def final_text(state: dict) -> str:
@@ -68,7 +68,3 @@ def structured_output(state: dict):
 def tool_outputs(state: dict) -> list[str]:
     """Tudo o que as tools devolveram (vira a base da checagem de números)."""
     return [str(m.content) for m in state["messages"] if isinstance(m, ToolMessage)]
-
-
-def tool_calls(state: dict) -> list[str]:
-    return [f"{c['name']}({c['args']})" for m in state["messages"] if isinstance(m, AIMessage) for c in m.tool_calls]
