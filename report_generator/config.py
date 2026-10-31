@@ -16,8 +16,9 @@ os.environ.setdefault("LANGSMITH_PROJECT", "ceris-ms-ia-bi-report")
 
 # --- LLM (mesmas variáveis do chatbot)
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
-LLM_MODEL = os.getenv("REPORT_LLM_MODEL", os.getenv("LLM_MODEL", "gemini-2.5-flash"))
-LLM_TEMPERATURE = float(os.getenv("REPORT_LLM_TEMPERATURE", "0.2"))
+# Vazio no .env conta como "não definido": cai no LLM_MODEL do chatbot
+LLM_MODEL = os.getenv("REPORT_LLM_MODEL") or os.getenv("LLM_MODEL") or "gemini-2.5-flash"
+LLM_TEMPERATURE = float(os.getenv("REPORT_LLM_TEMPERATURE") or "0.2")
 
 # --- API e autenticação (mesmo esquema do NexUs-AI: X-API-Key + Bearer JWT do NexUs-Auth)
 API_KEY = os.getenv("API_KEY", "")
@@ -34,17 +35,54 @@ MONGODB_DB = os.getenv("MONGODB_DB", "nexus_bi")
 MONGODB_REPORTS_COLLECTION = os.getenv("MONGODB_REPORTS_COLLECTION", "reports")
 MONGODB_JOBS_COLLECTION = os.getenv("MONGODB_REPORT_JOBS_COLLECTION", "report_jobs")
 
-# --- Dados de entrada: "mock" por enquanto; "db" quando a base limpa existir
-DATA_SOURCE = os.getenv("REPORT_DATA_SOURCE", "mock")
+# --- Dados de entrada: "mock" (desenvolvimento) ou "databricks" (dados limpos, data/databricks.py)
+DATA_SOURCE = os.getenv("REPORT_DATA_SOURCE", "mock").strip().lower()
+DATABRICKS = {
+    "server_hostname": os.getenv("DATABRICKS_SERVER_HOSTNAME", ""),
+    "http_path": os.getenv("DATABRICKS_HTTP_PATH", ""),
+    "access_token": os.getenv("DATABRICKS_TOKEN", ""),
+    "catalog": os.getenv("DATABRICKS_CATALOG", "workspace"),
+    "schema": os.getenv("DATABRICKS_SCHEMA", "gold"),
+}
+# Gold: UF com menos lotes que isso fica fora do ranking e do mapa (amostra pequena distorce o %)
+MIN_LOTES_UF = int(os.getenv("REPORT_MIN_LOTES_UF", "30"))
+# Horários (de Brasília) em que o GET /dashboard busca a Gold de novo e atualiza o cache em memória; fora
+# desses horários devolve o que já tem guardado. A Gold só muda 1x por dia, às 07h (Job_NexUs_BI): o padrão
+# 8h/20h garante no máximo 2 buscas por dia por mês pedido, sempre já depois da carga do dia.
+DASHBOARD_REFRESH_HOURS = sorted({int(h) for h in os.getenv("REPORT_DASHBOARD_REFRESH_HOURS", "8,20").split(",")})
+# Cache em memória da leitura da Gold (por mês pedido). O relatório diário e o /dashboard dividem o mesmo
+# resultado, então a Free Edition acorda o warehouse uma vez só.
+GOLD_CACHE_SECONDS = int(os.getenv("REPORT_GOLD_CACHE_SECONDS", "1800"))
 MOCK_SEED = int(os.getenv("REPORT_MOCK_SEED", "42"))
 # Privacidade: grupos (UF) com menos households que isso aparecem como "dados insuficientes"
 MIN_HOUSEHOLDS = int(os.getenv("REPORT_MIN_HOUSEHOLDS", "10"))
 HISTORY_MONTHS = int(os.getenv("REPORT_HISTORY_MONTHS", "6"))  # meses anteriores lidos do Mongo
 
-# --- PDF: Google Cloud Storage; sem GCS_BUCKET o PDF fica na pasta local REPORT_OUTPUT_DIR
-GCS_BUCKET = os.getenv("GCS_BUCKET", "")
-GCS_PREFIX = os.getenv("GCS_PREFIX", "relatorios")
+# --- PDF: Supabase Storage; sem SUPABASE_URL o PDF fica na pasta local REPORT_OUTPUT_DIR
+SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")  # só no servidor; nunca no front-end
+SUPABASE_BUCKET = os.getenv("SUPABASE_BUCKET", "relatorio")
+SUPABASE_PREFIX = os.getenv("SUPABASE_PREFIX", "relatorios")
 OUTPUT_DIR = ROOT_DIR / os.getenv("REPORT_OUTPUT_DIR", "output/relatorios")
+
+
+def _flag(name: str, default: str) -> bool:
+    return os.getenv(name, default).strip().lower() in ("1", "true", "sim", "yes", "on")
+
+
+# --- Agendamento (scheduler.py)
+#   diario  -> todo dia às SCHEDULE_HOUR gera o relatório do MÊS ATUAL até hoje ("parcial", sobrescreve o do dia
+#              anterior) e, quando o mês vira, fecha o anterior. É o modo para testar.
+#   mensal  -> só no dia SCHEDULE_DAY gera o mês que acabou.
+# O Job do Databricks atualiza a Gold às 07:00 (Brasília): mantenha a hora depois disso.
+SCHEDULE_ENABLED = _flag("REPORT_SCHEDULE_ENABLED", "true")
+SCHEDULE_FREQUENCY = os.getenv("REPORT_SCHEDULE_FREQUENCY", "diario").strip().lower()
+if SCHEDULE_FREQUENCY not in ("diario", "mensal"):
+    SCHEDULE_FREQUENCY = "diario"
+SCHEDULE_DAY = min(max(int(os.getenv("REPORT_SCHEDULE_DAY", "1")), 1), 28)  # só no modo mensal
+SCHEDULE_HOUR = min(max(int(os.getenv("REPORT_SCHEDULE_HOUR", "8")), 0), 23)
+SIGNED_URL_SECONDS = int(os.getenv("REPORT_PDF_URL_EXPIRES", "600"))
+AUTO_PUBLISH = _flag("REPORT_AUTO_PUBLISH", "false")  # true = publica sem revisão do ADMIN
 
 
 def validate_config(use_ai: bool = True) -> list[str]:
@@ -52,4 +90,10 @@ def validate_config(use_ai: bool = True) -> list[str]:
     required = {"MONGODB_URI": MONGODB_URI}
     if use_ai:
         required["GOOGLE_API_KEY"] = GOOGLE_API_KEY
+    if SUPABASE_URL:
+        required["SUPABASE_SERVICE_ROLE_KEY"] = SUPABASE_KEY
+    if DATA_SOURCE in ("databricks", "db"):
+        required["DATABRICKS_SERVER_HOSTNAME"] = DATABRICKS["server_hostname"]
+        required["DATABRICKS_HTTP_PATH"] = DATABRICKS["http_path"]
+        required["DATABRICKS_TOKEN"] = DATABRICKS["access_token"]
     return [f"Variável ausente no .env: {name}" for name, value in required.items() if not value]

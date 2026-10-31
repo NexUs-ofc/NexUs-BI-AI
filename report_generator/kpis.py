@@ -1,7 +1,8 @@
 """Catálogo dos KPIs do relatório: nome, fórmula, unidade e meta.
 
 É a única fonte dessas definições: a análise, os prompts, o template e o dashboard devem usar estes
-códigos (D1, D3...). Para mudar uma meta, altere só aqui.
+códigos (D1, D3...). Metas e fórmulas seguem as tabelas Gold do Databricks (workspace.gold.kpi_cards),
+que são a fonte oficial. Para mudar uma meta, altere aqui e na Gold.
 
 regra: "<=" quer dizer que o valor deve ficar ATÉ a meta (todos os KPIs atuais são "quanto menor, melhor").
 tipo_meta: "meta" (fora dela = acima_da_meta) ou "alerta" (D4: fora dela = alerta).
@@ -24,25 +25,37 @@ class KpiDef:
 KPIS: dict[str, KpiDef] = {
     k.codigo: k
     for k in [
-        KpiDef("D1", "Taxa de desperdício", "item_expired / (item_expired + item_consumed)", "%", 15.0, "<=",
+        KpiDef("D1", "Taxa de desperdício", "unidades descartadas ÷ unidades que saíram da despensa (consumidas + descartadas), no mês",
+               "%", 15.0, "<=", descricao_card="Indicador com meta"),
+        KpiDef("D2", "Descarte por esquecimento", "unidades descartadas mais de 7 dias depois de vencer ÷ unidades descartadas com validade, no mês",
+               "%"),
+        KpiDef("D3", "Itens vencidos na despensa", "unidades vencidas ÷ unidades com validade (foto da despensa)", "%", 5.0, "<=",
                descricao_card="Indicador com meta"),
-        KpiDef("D3", "% itens vencidos na despensa", "qtd vencida / qtd com validade", "%", 5.0, "<=",
-               descricao_card="Indicador com meta"),
-        KpiDef("D4", "% a vencer em 7 dias", "qtd com validade em até 7 dias / qtd com validade", "%", 10.0, "<=",
+        KpiDef("D4", "Itens que vencem em 7 dias", "unidades que vencem em até 7 dias ÷ unidades com validade (foto da despensa)", "%", 10.0,
+               "<=",
                tipo_meta="alerta", descricao_card="Alerta acima do limite"),
-        KpiDef("D5", "Ranking de vencimento por UF", "DENSE_RANK por UF de (vencidos + a vencer em 30 dias)", "rank"),
-        KpiDef("D6", "Estoque abaixo do mínimo", "households abaixo / households com mínimo configurado", "%",
-               20.0, "<=", descricao_card="Controle de reposição"),
-        KpiDef("D7", "Vida útil no cadastro", "expiry_date - created_at (dias)", "dias"),
-        KpiDef("D8", "% itens sem validade", "COUNT(expiry_date IS NULL) / COUNT(*)", "%", 5.0, "<=",
+        KpiDef("D5", "Risco de vencimento por estado",
+               "% das unidades vencidas ou vencendo em até 30 dias, por UF (1 = maior risco; UFs com amostra pequena "
+               "ficam fora)", "rank"),
+        KpiDef("D6", "Casas abaixo do estoque mínimo", "casas com algum item abaixo do mínimo ÷ casas com mínimo configurado (foto da despensa)", "%",
+               30.0, "<=", descricao_card="Controle de reposição"),
+        KpiDef("D7", "Prazo de validade cadastrado", "mediana de dias entre a entrada do lote e a validade", "dias"),
+        KpiDef("D8", "Itens sem validade cadastrada", "unidades sem validade ÷ todas as unidades (foto da despensa)", "%", 10.0, "<=",
                descricao_card="Qualidade de cadastro"),
-        KpiDef("D9", "Índice de desperdício por categoria", "expirados da categoria / households com a categoria",
-               "indice"),
+        KpiDef("D9", "Desperdício por categoria",
+               "unidades descartadas da categoria no mês ÷ casas que movimentaram a categoria no mês", "unid./casa"),
     ]
 }
 
 # KPIs de valor único (aparecem como cards e têm histórico mês a mês)
 CARD_KPIS = ["D1", "D3", "D4", "D6", "D8"]
+# KPIs de EVENTO (consumo/descarte no mês, via fato_movimento): existem em qualquer mês com movimento.
+EVENT_KPIS = ["D1", "D2", "D9"]
+# KPIs de ESTADO (dependem da foto da despensa): só existem em meses com foto.
+STATE_KPIS = ["D3", "D4", "D5", "D6", "D7", "D8"]
+# Cards com meta, por seção do relatório
+EVENT_CARDS = ["D1"]
+STATE_CARDS = ["D3", "D4", "D6", "D8"]
 
 
 def kpi_status(codigo: str, valor: float | None) -> str:
