@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import validate_config
-from app.controller import admin_controller, chat_controller
+from app.controller import admin_controller, chat_controller, ranking_controller
 
 for problem in validate_config():
     print(f"[config] ATENÇÃO: {problem}")
@@ -30,6 +30,7 @@ app.add_middleware(
 
 app.include_router(chat_controller.router)
 app.include_router(admin_controller.router)
+app.include_router(ranking_controller.router)
 
 
 @app.get("/health", tags=["infra"])
