@@ -57,6 +57,11 @@ REPORTS_LATEST_LIMIT = int(os.getenv("REPORTS_LATEST_LIMIT", "3"))  # default fo
 REPORTS_MAX_MONTHS = int(os.getenv("REPORTS_MAX_MONTHS", "24"))  # largest period a single search may cover
 REPORTS_MAX_CHARS = int(os.getenv("REPORTS_MAX_CHARS", "60000"))  # cap on what one tool call sends to the LLM
 
+# --- Upstash Redis (rankings de produtos)
+# REST URL e token do seu projeto em https://console.upstash.com/redis
+REDIS_REST_URL = os.getenv("REDIS_REST_URL", "")
+REDIS_REST_TOKEN = os.getenv("REDIS_REST_TOKEN", "")
+
 
 def validate_config() -> list[str]:
     """List what is missing in .env (empty list = all good)."""
