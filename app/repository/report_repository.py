@@ -1,6 +1,8 @@
 """Access to the consolidated reports stored in MongoDB (read-only).
 
 Business rule of the MVP: there is ONE report per month, the same for every company.
+The reports are written by the report generator (report_generator/). Every generated report is already
+published (there is no draft step), so all documents are read.
 """
 from functools import lru_cache
 
@@ -34,7 +36,9 @@ _PERIOD_FIELDS = {
     }
 }
 _PERIOD_KEY = {"$addFields": {"_period": {"$add": [{"$multiply": ["$_year", 100]}, "$_month"]}}}
-_HIDE_HELPERS = {"$project": {"_id": 0, "_year": 0, "_month": 0, "_period": 0}}
+# Internal fields of the generator that the agents do not need (status, quality check, PDF path...)
+_HIDE_HELPERS = {"$project": {"_id": 0, "_year": 0, "_month": 0, "_period": 0, "periodo": 0, "status": 0,
+                              "qualidade": 0, "pdf": 0, "versao_schema": 0, "gerado_com_ia": 0}}
 _NEWEST_FIRST = {"$sort": {"_year": -1, "_month": -1}}
 
 

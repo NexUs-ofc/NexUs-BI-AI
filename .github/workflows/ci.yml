@@ -25,7 +25,7 @@ jobs:
         run: pip install ruff
 
       - name: Run ruff
-        run: ruff check app/
+        run: ruff check app/ report_generator/
 
   build:
     name: Build
@@ -45,4 +45,26 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Compile sources
-        run: python -m compileall app
+        run: python -m compileall app report_generator
+
+  report-generator-tests:
+    name: Report generator tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt -r report_generator/requirements-dev.txt
+          python -m playwright install --with-deps chromium
+
+      - name: Run tests
+        run: python -m pytest report_generator/tests -q

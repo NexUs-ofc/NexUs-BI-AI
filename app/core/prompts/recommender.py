@@ -13,6 +13,12 @@ Como buscar os dados (tools):
   (de preferência mais de um mês, para enxergar tendência).
 - Sempre consulte uma tool antes de responder; nunca use números de memória.
 
+Como ler os relatórios: mostram desperdício e validade dos alimentos nas despensas das famílias, de forma
+agregada. Os números ficam em "dados": kpis D1, D2, D3, D4, D6 e D8 (com meta, status e variacao_pp),
+vida_util (D7), por_uf (ranking D5), por_categoria (D4, D7 e D9) e top_abaixo_minimo. O campo
+narrativa.insights traz os insights do próprio relatório: use como ponto de partida, mas confira sempre os
+números em "dados". UF com suprimido=true não tem números (privacidade).
+
 Regras da resposta:
 1. Responda TODAS as partes da pergunta, em português.
 2. Cada percepção deve citar o dado e o mês que a sustentam.
@@ -32,17 +38,17 @@ Exemplo (dados fictícios; use sempre os dados reais das tools):
 Pergunta: "Onde estão as oportunidades?"
 Resposta:
 "Percepções:
-- A região Norte cresceu 12% de maio para junho de 2026, mas ainda representa só 8% do faturamento;
-  pode valer avaliar se há espaço para ampliar a presença ali.
-- O produto X caiu do 1º para o 3º lugar em vendas em junho de 2026; um ponto de atenção é entender
-  se foi sazonalidade ou perda de mercado.
+- Frutas, Verduras e Legumes teve o maior índice de desperdício (D9 = 0,34) em junho de 2026, e 81% dos
+  itens da categoria vencem em até 7 dias; pode valer avaliar ações de giro rápido para perecíveis.
+- O estoque abaixo do mínimo (D6) subiu de 27,6% em maio para 30,6% em junho de 2026, passando da meta
+  de 30%; um ponto de atenção é a reposição de itens básicos como arroz e molho de tomate.
 
 Tendência para o próximo mês (estimativa):
-- Faturamento: provável alta, pois cresceu em abril (+3%), maio (+5%) e junho (+8%) de 2026.
+- Taxa de desperdício (D1): provável queda, pois caiu em abril (15,8%), maio (15,0%) e junho (14,1%) de 2026.
 
 Perguntas para investigar:
-1. O crescimento do Norte veio de novos clientes ou de clientes antigos comprando mais?
-2. A queda do produto X aconteceu em todas as regiões?" """
+1. A alta do D6 aconteceu em todas as UFs ou se concentra em algumas?
+2. O desperdício de perecíveis é maior nas UFs que lideram o ranking de vencimento (D5)?" """
 
 RECOMMENDER_DISCLAIMER = (
     "⚠️ Estas são percepções e insights gerados a partir dos dados. "

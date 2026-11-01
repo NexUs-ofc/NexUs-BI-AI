@@ -55,7 +55,7 @@ MONGODB_DB = os.getenv("MONGODB_DB", "nexus_bi")
 MONGODB_REPORTS_COLLECTION = os.getenv("MONGODB_REPORTS_COLLECTION", "reports")
 REPORTS_LATEST_LIMIT = int(os.getenv("REPORTS_LATEST_LIMIT", "3"))  # default for "most recent reports"
 REPORTS_MAX_MONTHS = int(os.getenv("REPORTS_MAX_MONTHS", "24"))  # largest period a single search may cover
-REPORTS_MAX_CHARS = int(os.getenv("REPORTS_MAX_CHARS", "15000"))  # cap on what one tool call sends to the LLM
+REPORTS_MAX_CHARS = int(os.getenv("REPORTS_MAX_CHARS", "60000"))  # cap on what one tool call sends to the LLM
 
 
 def validate_config() -> list[str]:
