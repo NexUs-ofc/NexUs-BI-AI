@@ -1,43 +1,42 @@
-"""FAQ retriever tool used by the FAQ agent: semantic search in the FAQ indexed in Qdrant."""
+"""FAQ retriever tool: semantic search in the FAQ indexed in Qdrant (embedding of the query + vector search).
+
+If Qdrant or the embedding fails, or the collection was never indexed, the tool raises ExternalServiceError:
+the chat answers with a clear error instead of letting the model answer from "general knowledge".
+"""
 from langchain_core.tools import StructuredTool
 
 from app.config import FAQ_TOP_K
-from app.core.prompts.tools import (
-    FAQ_NOT_INDEXED,
-    FAQ_OUTDATED,
-    NO_FAQ,
-    QDRANT_UNAVAILABLE,
-    SEARCH_FAQ_DESCRIPTION,
-)
+from app.core.errors import ExternalServiceError
+from app.core.prompts.tools import NO_FAQ, SEARCH_FAQ_DESCRIPTION
+from app.observability import trace
+from app.observability.trace import redact
 from app.repository.faq_repository import count_faq_items, search_faq
+
+FAQ_SETUP_HINT = "rode `python -m app.services.faq_service` para indexar o app/static/faq.json"
 
 
 def _format(items: list[dict]) -> str:
-    return "\n\n".join(f"P: {i.get('question', '')}\nR: {i.get('answer', '')}" for i in items)
+    return "\n\n".join(f"P: {i['question']}\nR: {i['answer']}" for i in items)
 
 
 def search_faq_tool(query: str) -> str:
-    # DIAGNÓSTICO: Qdrant desativado temporariamente para isolar o problema do chat.
-    # Para reativar, remova as duas linhas abaixo.
-    import datetime as _dt; print(f"[{_dt.datetime.now().strftime('%H:%M:%S.%f')[:-3]}] [faq_tool] Qdrant DESATIVADO — retornando indisponível", flush=True)
-    return QDRANT_UNAVAILABLE
-
-    try:  # noqa: unreachable
-        found = search_faq(query, FAQ_TOP_K)
-    except Exception as exc:
-        # Qdrant indisponível (não iniciado, cota esgotada, etc.) — degrada em vez de derrubar o chat.
-        print(f"[faq] Qdrant inacessível: {exc}")
-        return QDRANT_UNAVAILABLE
-    items = [i for i in found if i.get("question") and i.get("answer")]
-    if items:
-        return _format(items)
-    if found:
-        print(f"[faq] ATENÇÃO: {FAQ_OUTDATED}")
-        return FAQ_OUTDATED
-    if count_faq_items() == 0:
-        print(f"[faq] ATENÇÃO: {FAQ_NOT_INDEXED}")
-        return FAQ_NOT_INDEXED
-    return NO_FAQ
+    with trace.step("tool.search_faq", chars_consulta=len(query)) as info:
+        try:
+            found = search_faq(query, FAQ_TOP_K)
+        except ExternalServiceError:
+            raise
+        except Exception as error:  # network, auth, collection...
+            raise ExternalServiceError("Qdrant", f"a busca no FAQ falhou ({redact(error, 150)}).") from error
+        items = [i for i in found if i.get("question") and i.get("answer")]
+        info.update(encontrados=len(found), usados=len(items),
+                    melhor_score=max((i.get("score", 0) for i in items), default=None))
+        if items:
+            return _format(items)
+        if found:
+            raise ExternalServiceError("Qdrant", f"a collection do FAQ está num formato antigo; {FAQ_SETUP_HINT}.")
+        if count_faq_items() == 0:
+            raise ExternalServiceError("Qdrant", f"o FAQ não está indexado; {FAQ_SETUP_HINT}.")
+        return NO_FAQ
 
 
 def build_faq_tools() -> list[StructuredTool]:
