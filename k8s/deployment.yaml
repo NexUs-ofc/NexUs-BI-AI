@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nexus-bi-ai
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: nexus-bi-ai
+  template:
+    metadata:
+      labels:
+        app: nexus-bi-ai
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: nexus-bi-ai
+        image: nexus-bi-ai:local
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8000
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+        envFrom:
+        - secretRef:
+            name: nexus-bi-ai-secret
+        startupProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 60
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        volumeMounts:
+        - name: reports
+          mountPath: /app/output
+      volumes:
+      - name: reports
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nexus-bi-ai
+spec:
+  type: ClusterIP
+  selector:
+    app: nexus-bi-ai
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
