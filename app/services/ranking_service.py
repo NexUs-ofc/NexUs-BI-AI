@@ -54,11 +54,11 @@ def get_product_rankings(state: str | None) -> ProductRankingsResponse:
     try:
         registered_raw = ranking_repository.get_registered_ranking(state)
         expired_raw = ranking_repository.get_expired_ranking(state)
-    except RuntimeError as exc:
+    except RuntimeError:
         # Credenciais Redis ausentes: propaga para o controller logar e retornar 503
         raise
-    except Exception as exc:
-        logger.error("[rankings] Falha ao consultar o Redis: %s", exc, exc_info=True)
+    except Exception:
+        logger.exception("[rankings] Falha ao consultar o Redis")
         # Retorna listas vazias em vez de derrubar a rota por falha do cache
         registered_raw = []
         expired_raw = []
