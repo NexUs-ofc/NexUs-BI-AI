@@ -18,7 +18,10 @@ The decisions (blocked? out of scope? retry?) are conditional edges.
 Print the graph as a Mermaid diagram (from the project root):
     python -m app.core.orchestrator
 """
+import asyncio
+import datetime
 import operator
+import re
 import time
 from typing import Annotated, TypedDict
 
@@ -71,6 +74,28 @@ class ChatState(TypedDict, total=False):
     output_blocked: bool  # the output guardrail replaced the answer
     steps: Annotated[list[str], operator.add]  # debug trace; each node appends to it
     timings: Annotated[list[dict], operator.add]  # how long each node took (filled by @timed)
+    is_greeting: bool     # set by input_guardrail; skips router + judge when True
+
+
+
+def _log(node: str, msg: str = "") -> None:
+    ts = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
+    print(f"[{ts}] [{node}] {msg}", flush=True)
+
+# ---------------------------------------------------------------- greeting detection
+
+_GREETING_RE = re.compile(
+    r"^(oi|ol[aá]|ei|hey|hi+|hello|bom\s?dia|boa\s?tarde|boa\s?noite"
+    r"|tudo\s?bem|tudo\s?bom|como\s?vai|como\s?est[aá]|e\s?a[ií]|eae|opa"
+    r"|good\s?morning|good\s?afternoon|good\s?evening|howdy|what'?s\s?up|sup"
+    r"|oi,?\s?tudo|ol[aá],?\s?tudo|oi\s+assistente|ol[aá]\s+assistente)"
+    r"[\s!?.]*$",
+    re.IGNORECASE,
+)
+
+def _is_greeting(text: str) -> bool:
+    """True for short conversational openers that need no data lookup or judge review."""
+    return bool(_GREETING_RE.match(text.strip())) and len(text.split()) <= 10
 
 
 # ---------------------------------------------------------------- nodes
@@ -78,14 +103,17 @@ class ChatState(TypedDict, total=False):
 @traceable(name="input_guardrail")
 @timed("input_guardrail")
 def input_guardrail_node(state: ChatState) -> dict:
+    _log("input_guardrail", f"mensagem={state['message']!r:.60}")
     guard = input_guardrail(state["message"])
     if not guard.allowed:
         return {"route": "blocked", "answer": guard.reason, "steps": [f"guardrail de entrada: BLOQUEADO ({guard.reason})"]}
     masked = " (dados pessoais mascarados)" if guard.text != state["message"].strip() else ""
+    greeting = _is_greeting(guard.text)
     return {
         "question": guard.text,
         "current_input": guard.text,
         "attempts": 0,
+        "is_greeting": greeting,
         "steps": [f"guardrail de entrada: ok{masked}"],
     }
 
@@ -93,7 +121,9 @@ def input_guardrail_node(state: ChatState) -> dict:
 @traceable(name="router")
 @timed("router")
 def router_node(state: ChatState) -> dict:
+    _log("router", f"question={state['question']!r:.60}")
     decision = route(state["question"], state["history"])
+    _log("router", f"decisão={decision.route}")
     update = {"route": decision.route, "steps": [f"roteador: {decision.route} ({decision.reason})"]}
     if decision.route == "out_of_scope":
         update.update(answer=OUT_OF_SCOPE_ANSWER, approved=True)
@@ -103,14 +133,46 @@ def router_node(state: ChatState) -> dict:
 @traceable(name="specialist")
 @timed("specialist")
 def specialist_node(state: ChatState) -> dict:
+    _log("specialist", f"route={state['route']}")
     output = SPECIALISTS[state["route"]](state["current_input"], state["history"])
+    _log("specialist", "resposta recebida")
     steps = [f"tools: {', '.join(output.tool_calls)}"] if output.tool_calls else []
     return {"answer": output.answer, "context": output.context, "attempts": state["attempts"] + 1, "steps": steps}
+
+
+@traceable(name="greeting")
+@timed("specialist")
+def greeting_node(state: ChatState) -> dict:
+    _log("greeting", "chamando LLM...")
+    """Fast path for conversational openers: skip router and judge.
+    Uses faq_agent directly (no router LLM call) and auto-approves (no judge LLM call).
+    Saves ~2 Interactions API round-trips (~80s) per greeting.
+    """
+    from langchain_core.messages import HumanMessage, SystemMessage
+    from app.model.llm import get_llm
+    llm = get_llm()
+    greeting_system = (
+        "Você é o assistente do NexUs BI, sistema de Business Intelligence. "
+        "O usuário está cumprimentando. Responda de forma cordial e breve "
+        "e informe o que você pode ajudar (dúvidas sobre BI, relatórios, dados da empresa). "
+        "Não use markdown."
+    )
+    response = llm.invoke([SystemMessage(content=greeting_system), HumanMessage(content=state["question"])])
+    _log("greeting", "LLM respondeu")
+    return {
+        "route": "faq",
+        "answer": response.content,
+        "context": "",
+        "attempts": 1,
+        "approved": True,
+        "steps": ["roteador: faq (cumprimento — rota rápida)", "juiz: pulado (cumprimento)"],
+    }
 
 
 @traceable(name="judge")
 @timed("judge")
 def judge_node(state: ChatState) -> dict:
+    _log("judge", f"tentativa={state['attempts']}")
     verdict = judge(state["question"], state["answer"], state["context"], state["route"], state["history"])
     steps = [f"validação de números: {verdict.number_check}"]
     if verdict.tool_calls:
@@ -130,6 +192,7 @@ def judge_node(state: ChatState) -> dict:
 @traceable(name="finish")
 @timed("finish")
 def finish_node(state: ChatState) -> dict:
+    _log("finish")
     answer = state["answer"] if state["approved"] else REJECTED_ANSWER
     if state["route"] == "recommender" and state["approved"]:
         answer = f"{answer}\n\n{RECOMMENDER_DISCLAIMER}"
@@ -147,7 +210,11 @@ def finish_node(state: ChatState) -> dict:
 # ---------------------------------------------------------------- conditional edges
 
 def after_input_guardrail(state: ChatState) -> str:
-    return END if state.get("route") == "blocked" else "router"  # route only exists if it was blocked
+    if state.get("route") == "blocked":
+        return END
+    if state.get("is_greeting"):
+        return "greeting"  # skip router + judge
+    return "router"
 
 
 def after_router(state: ChatState) -> str:
@@ -166,13 +233,15 @@ def build_graph():
     graph = StateGraph(ChatState)
     graph.add_node("input_guardrail", input_guardrail_node)
     graph.add_node("router", router_node)
+    graph.add_node("greeting", greeting_node)
     graph.add_node("specialist", specialist_node)
     graph.add_node("judge", judge_node)
     graph.add_node("finish", finish_node)
 
     graph.add_edge(START, "input_guardrail")
-    graph.add_conditional_edges("input_guardrail", after_input_guardrail, ["router", END])
+    graph.add_conditional_edges("input_guardrail", after_input_guardrail, ["router", "greeting", END])
     graph.add_conditional_edges("router", after_router, ["specialist", "finish"])
+    graph.add_edge("greeting", "finish")  # greeting is always approved, goes straight to finish
     graph.add_edge("specialist", "judge")
     graph.add_conditional_edges("judge", after_judge, ["specialist", "finish"])
     graph.add_edge("finish", END)
@@ -204,6 +273,44 @@ class Orchestrator:
                     },
                     config={"callbacks": [tools]},
                 )
+            except Exception as e:
+                error = e
+                raise
+            finally:
+                record_question(trace_id, state, started, usage.usage_metadata, tools.tool_calls, error)
+        return Result(answer=state["answer"], route=state["route"], steps=state["steps"])
+
+    # Timeout global para evitar que o grafo fique preso indefinidamente
+    # (ex: modelo travado, API sem resposta, quota silenciosa).
+    _GRAPH_TIMEOUT_S: int = 85
+
+    async def aprocess(self, message: str) -> Result:
+        """Async version: uses ainvoke so multiple sessions run concurrently."""
+        started, state, error = time.perf_counter(), None, None
+        _log("aprocess", f"mensagem={message!r:.60}")
+        trace_id = new_trace_id()
+        tools = ToolMetricsCallback(trace_id)
+        with get_usage_metadata_callback() as usage:
+            try:
+                state = await asyncio.wait_for(
+                    GRAPH.ainvoke(
+                        {
+                            "session_id": self.session_id,
+                            "message": message,
+                            "history": get_session_history(self.session_id).messages,
+                            "steps": [],
+                            "timings": [],
+                        },
+                        config={"callbacks": [tools]},
+                    ),
+                    timeout=self._GRAPH_TIMEOUT_S,
+                )
+            except asyncio.TimeoutError as e:
+                error = e
+                raise RuntimeError(
+                    f"O assistente excedeu o tempo limite de {self._GRAPH_TIMEOUT_S}s. "
+                    "Tente novamente em instantes."
+                ) from e
             except Exception as e:
                 error = e
                 raise
