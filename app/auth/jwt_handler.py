@@ -60,15 +60,16 @@ def decode_token(token: str) -> dict:
         raise InvalidTokenError("Token inválido.") from error
 
 
-def create_test_token(profile_id: str, hours: int = 8) -> str:
+def create_test_token(profile_id: str, hours: int = 8, profile_type: str = "COMPANY") -> str:
     """Development only: sign a token like the Auth service would, to test the API in /docs."""
     now = int(time.time())
     claims = {"iss": JWT_ISSUER, "sub": str(profile_id), "iat": now, "exp": now + hours * 3600,
-              "profile_type": "COMPANY"}
+              "profile_type": profile_type}
     return jwt.encode(claims, secret_bytes(JWT_SECRET), algorithm=JWT_ALGORITHM)
 
 
 if __name__ == "__main__":
     profile = sys.argv[1] if len(sys.argv) > 1 else "1"
-    print(f"Token de teste para o perfil {profile} (válido por 8h):")
-    print(create_test_token(profile))
+    kind = sys.argv[2].upper() if len(sys.argv) > 2 else "COMPANY"  # COMPANY ou ADMIN
+    print(f"Token de teste para o perfil {profile} ({kind}, válido por 8h):")
+    print(create_test_token(profile, profile_type=kind))
