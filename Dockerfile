@@ -1,10 +1,12 @@
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PORT=8000
+    PIP_NO_CACHE_DIR=1 \
+    PORT=8000 \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
@@ -12,7 +14,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Chromium do Playwright (com as bibliotecas do sistema) para gerar o PDF dos relatórios
+RUN pip install -r requirements.txt \
+    && python -m playwright install --with-deps chromium
 
 COPY . .
 
