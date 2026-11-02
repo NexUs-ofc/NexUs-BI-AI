@@ -4,7 +4,9 @@ from datetime import datetime
 import pytest
 from fastapi.testclient import TestClient
 
-from report_generator import api, scheduler
+from app.app import app
+from app.controller import report_controller as api
+from report_generator import scheduler
 from report_generator.auth import jwt_handler
 from report_generator.config import BRAZIL_TZ
 
@@ -19,8 +21,10 @@ def client(db, monkeypatch):
     monkeypatch.setattr("report_generator.pipeline.render_pdf", lambda report: b"%PDF-teste")
     # "Hoje" fixo: a listagem mostra os últimos N meses a partir daqui
     monkeypatch.setattr(scheduler, "previous_month_now", lambda: (2026, 10))
+    # O /dashboard sem ano/mes usa o mês ATUAL: fixa também, senão o teste depende do dia em que roda
+    monkeypatch.setattr(scheduler, "current_month", lambda now=None: (2026, 10))
     api._dashboard_cache.clear()
-    return TestClient(api.app)
+    return TestClient(app)  # a API única (app/app.py), a mesma que vai para o Render
 
 
 def _headers(kind: str) -> dict:

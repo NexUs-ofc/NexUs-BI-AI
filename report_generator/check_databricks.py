@@ -10,7 +10,7 @@ import sys
 
 sys.path.insert(0, ".")
 
-from report_generator.config import DATABRICKS, validate_config
+from report_generator.config import BRAZIL_TZ, DATABRICKS, validate_config
 
 
 def main() -> None:
@@ -29,7 +29,7 @@ def main() -> None:
         ano, mes = int(sys.argv[1]), int(sys.argv[2])
     else:
         import datetime
-        hoje = datetime.date.today()
+        hoje = datetime.datetime.now(BRAZIL_TZ).date()
         ano, mes = (hoje.year, hoje.month - 1) if hoje.month > 1 else (hoje.year - 1, 12)
 
     print(f"\nConectando e lendo a Gold de {mes:02d}/{ano}... (pode demorar uns segundos pro warehouse acordar)")

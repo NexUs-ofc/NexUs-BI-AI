@@ -33,7 +33,7 @@ python -m report_generator.run 2026 9 --historico 6 --atualizar-pdfs  # cria his
 python -m report_generator.run --atualizar-pdfs               # refaz os PDFs de todos os relatórios (sem IA)
 python -m pytest report_generator/tests -q                    # testes (Mongo em memória, sem Gemini)
 
-python -m uvicorn report_generator.api:app --reload --port 8001   # API: http://localhost:8001/docs
+python -m uvicorn app.app:app --reload   # API única (chatbot + relatórios): http://localhost:8000/docs
 python -m report_generator.auth.jwt_handler 1 ADMIN               # token de teste (precisa JWT_SECRET_BASE64)
 ```
 
