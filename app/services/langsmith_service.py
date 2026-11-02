@@ -3,9 +3,9 @@
 It pages the LangSmith API, so it is slow and lives apart from the rest of the page. Without LangSmith
 (no key, tracing off, API down) it answers "disponivel": false instead of failing the panel.
 
-The graph nodes are LangSmith runs (@traceable), so the chain latency comes from there. The specialists
-are one node with three routes, which LangSmith does not tell apart: the per-agent latency comes from the
-"specialist" time saved in metrics_bi, split by route.
+The orchestrator and the number check are LangSmith runs (@traceable), so the chain latency comes from
+there. The assistant is one agent with two routes (faq, analyst), which LangSmith does not tell apart: the
+per-route latency comes from the "specialist" time saved in metrics_bi, split by route.
 """
 import math
 import os
@@ -18,8 +18,9 @@ from app.config import BRAZIL_TZ
 from app.repository.metrics_repository import find_metrics_between
 
 ROOT_RUN = "orchestrator"
-CHAIN_RUNS = ("input_guardrail", "router", "specialist", "judge", "finish")
-AGENT_ROUTES = ("faq", "analyst", "recommender")
+# input_guardrail/router/specialist/judge/finish: runs of the old graph, kept so past periods still show up
+CHAIN_RUNS = ("input_guardrail", "router", "specialist", "judge", "finish", "check_numbers")
+AGENT_ROUTES = ("faq", "analyst", "recommender")  # recommender: past questions only
 MAX_RUNS = 10_000
 
 
