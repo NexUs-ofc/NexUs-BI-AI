@@ -27,6 +27,7 @@ User = Annotated[CurrentUser, Depends(get_current_user)]
 @router.get(
     "/products",
     response_model=ProductRankingsResponse,
+    response_model_by_alias=True,
     summary="Top 5 produtos mais registrados e mais vencidos",
     description=(
         "Retorna dois rankings com os cinco produtos de maior destaque:\n\n"

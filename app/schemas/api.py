@@ -31,4 +31,4 @@ class CurrentUser(BaseModel):
     """Who is calling: profile id from the JWT ("sub") and company id confirmed in PostgreSQL."""
 
     profile_id: int
-    company_id: int
+    company_id: int | None = None
