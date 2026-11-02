@@ -35,8 +35,10 @@ MONGODB_DB = os.getenv("MONGODB_DB", "nexus_bi")
 MONGODB_REPORTS_COLLECTION = os.getenv("MONGODB_REPORTS_COLLECTION", "reports")
 MONGODB_JOBS_COLLECTION = os.getenv("MONGODB_REPORT_JOBS_COLLECTION", "report_jobs")
 
-# --- Dados de entrada: "mock" (desenvolvimento) ou "databricks" (dados limpos, data/databricks.py)
-DATA_SOURCE = os.getenv("REPORT_DATA_SOURCE", "mock").strip().lower()
+# --- Dados de entrada: "databricks" (Gold, padrão) ou "mock" (só testes e demonstração local).
+# O mock nunca é usado sem ser pedido: com REPORT_DATA_SOURCE vazio a API lê a Gold de verdade, e o /health
+# avisa quando o mock está ligado.
+DATA_SOURCE = (os.getenv("REPORT_DATA_SOURCE") or "databricks").strip().lower()
 DATABRICKS = {
     "server_hostname": os.getenv("DATABRICKS_SERVER_HOSTNAME", ""),
     "http_path": os.getenv("DATABRICKS_HTTP_PATH", ""),
