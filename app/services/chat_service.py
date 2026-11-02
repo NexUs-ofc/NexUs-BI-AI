@@ -14,13 +14,30 @@ class LLMError(Exception):
 def _memory_key(session_id: str, user: CurrentUser) -> str:
     """The memory is stored per company + session: another company that guesses (or reuses)
     the session_id still gets an empty history."""
-    return f"{user.company_id}:{session_id}"
+    return f"{user.company_id or user.profile_id}:{session_id}"
 
 
 def answer_question(request: ChatRequest, user: CurrentUser) -> ChatResponse:
     session_id = request.session_id or str(uuid.uuid4())
     try:
         result = Orchestrator(_memory_key(session_id, user)).process(request.question)
+    except Exception as e:
+        raise LLMError(explain_error(e)) from e
+
+    return ChatResponse(
+        session_id=session_id,
+        answer=result.answer,
+        route=result.route,
+        steps=result.steps if request.debug else None,
+    )
+
+
+async def answer_question_async(request: ChatRequest, user: CurrentUser) -> ChatResponse:
+    """Async version: yields the event loop while waiting for LLM responses,
+    so FastAPI can handle other requests in parallel."""
+    session_id = request.session_id or str(uuid.uuid4())
+    try:
+        result = await Orchestrator(_memory_key(session_id, user)).aprocess(request.question)
     except Exception as e:
         raise LLMError(explain_error(e)) from e
 

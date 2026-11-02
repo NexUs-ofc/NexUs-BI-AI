@@ -18,9 +18,11 @@ User = Annotated[CurrentUser, Depends(get_current_user)]
 
 
 @router.post("", response_model=ChatResponse)
-def ask(request: ChatRequest, user: User) -> ChatResponse:
+async def ask(request: ChatRequest, user: User) -> ChatResponse:
+    """Async endpoint: FastAPI runs this without blocking the event loop,
+    so multiple users get served concurrently."""
     try:
-        return chat_service.answer_question(request, user)
+        return await chat_service.answer_question_async(request, user)
     except chat_service.LLMError as e:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(e)) from e
 
