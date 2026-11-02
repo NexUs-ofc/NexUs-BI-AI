@@ -1,185 +1,44 @@
-"""Orchestrator: coordinates the full flow of one message as a LangGraph graph (StateGraph).
+"""Orchestrator: the full path of one chat message, in plain Python.
 
-    START -> input_guardrail --(blocked)--> END
-                    | ok
-                  router --(out_of_scope)--> finish
-                    |
-                specialist <-----------------+
-                    |                        | rejected and retries left
-                  judge ---------------------+
-                    | approved / no retries left
-                  finish (output guardrail + session memory) -> END
+    input guardrail (rules, no LLM) --blocked--> answer with the reason
+          |
+    assistant (1 agent: Gemini + FAQ/report tools) <---------------+
+          |                                                        | a number of the answer is not in
+    number check (code, no LLM) -----------------------------------+ the data and retries are left
+          |
+    finish: output guardrail + session memory
 
-Each node receives the state, does one job and returns only the fields it changed.
-The decisions (blocked? out of scope? retry?) are conditional edges.
-@traceable sends each node to LangSmith when LANGSMITH_TRACING=true (see config.py).
-@timed measures each node, and process() saves one metric document per question (observability/metrics.py).
+Gemini calls per question: 1 without tools (greeting, BI concept), usually 2 with one tool (call the tool,
+then answer). The old graph used router + specialist + LLM judge: 4 to 12 sequential calls.
 
-Print the graph as a Mermaid diagram (from the project root):
-    python -m app.core.orchestrator
+Every stage is logged with its time (observability/trace.py) and timed for the admin panel
+(state["timings"], saved in metrics_bi by observability/metrics.py).
 """
-import operator
+import asyncio
+import threading
 import time
-from typing import Annotated, TypedDict
 
 from langchain_core.callbacks import get_usage_metadata_callback
-from langgraph.graph import END, START, StateGraph
 from langsmith import traceable
 
-from app.config import MAX_JUDGE_RETRIES
-from app.core.analyst import analyst_agent
-from app.core.faq import faq_agent
-from app.core.judge import judge
+from app.config import CHAT_TIMEOUT_S, MAX_JUDGE_RETRIES
+from app.core.assistant import assistant_agent
 from app.core.memory import get_session_history
-from app.core.prompts.orchestrator import (
-    JUDGE_REVISION,
-    OUT_OF_SCOPE_ANSWER,
-    REJECTED_ANSWER,
-)
-from app.core.prompts.recommender import RECOMMENDER_DISCLAIMER
-from app.core.recommender import recommender_agent
-from app.core.router import route
+from app.core.prompts.orchestrator import REJECTED_ANSWER, REVISION
 from app.guardrails.guardrails import input_guardrail, output_guardrail
-from app.observability.metrics import (
-    ToolMetricsCallback,
-    new_trace_id,
-    record_question,
-    timed,
-)
+from app.observability import trace
+from app.observability.metrics import ToolMetricsCallback, new_trace_id, record_question
 from app.schemas.agents import Result
-
-SPECIALISTS = {
-    "faq": faq_agent,
-    "analyst": analyst_agent,
-    "recommender": recommender_agent,
-}
+from app.tools.judge_tools import format_numbers, missing_numbers
 
 
-class ChatState(TypedDict, total=False):
-    """Everything the nodes share while one message goes through the graph."""
-
-    session_id: str
-    message: str        # text sent by the user
-    question: str       # text after the input guardrail (personal data masked)
-    history: list       # previous messages of the session
-    route: str          # faq | analyst | recommender | out_of_scope | blocked
-    current_input: str  # what the specialist receives (question, or question + judge feedback)
-    answer: str
-    context: str        # source of truth used by the specialist (sent to the judge)
-    attempts: int       # how many times the specialist ran
-    approved: bool
-    output_blocked: bool  # the output guardrail replaced the answer
-    steps: Annotated[list[str], operator.add]  # debug trace; each node appends to it
-    timings: Annotated[list[dict], operator.add]  # how long each node took (filled by @timed)
+class ChatTimeoutError(Exception):
+    """The whole message took longer than CHAT_TIMEOUT_S."""
 
 
-# ---------------------------------------------------------------- nodes
-
-@traceable(name="input_guardrail")
-@timed("input_guardrail")
-def input_guardrail_node(state: ChatState) -> dict:
-    guard = input_guardrail(state["message"])
-    if not guard.allowed:
-        return {"route": "blocked", "answer": guard.reason, "steps": [f"guardrail de entrada: BLOQUEADO ({guard.reason})"]}
-    masked = " (dados pessoais mascarados)" if guard.text != state["message"].strip() else ""
-    return {
-        "question": guard.text,
-        "current_input": guard.text,
-        "attempts": 0,
-        "steps": [f"guardrail de entrada: ok{masked}"],
-    }
-
-
-@traceable(name="router")
-@timed("router")
-def router_node(state: ChatState) -> dict:
-    decision = route(state["question"], state["history"])
-    update = {"route": decision.route, "steps": [f"roteador: {decision.route} ({decision.reason})"]}
-    if decision.route == "out_of_scope":
-        update.update(answer=OUT_OF_SCOPE_ANSWER, approved=True)
-    return update
-
-
-@traceable(name="specialist")
-@timed("specialist")
-def specialist_node(state: ChatState) -> dict:
-    output = SPECIALISTS[state["route"]](state["current_input"], state["history"])
-    steps = [f"tools: {', '.join(output.tool_calls)}"] if output.tool_calls else []
-    return {"answer": output.answer, "context": output.context, "attempts": state["attempts"] + 1, "steps": steps}
-
-
-@traceable(name="judge")
-@timed("judge")
-def judge_node(state: ChatState) -> dict:
-    verdict = judge(state["question"], state["answer"], state["context"], state["route"], state["history"])
-    steps = [f"validação de números: {verdict.number_check}"]
-    if verdict.tool_calls:
-        steps.append(f"tools do juiz: {', '.join(verdict.tool_calls)}")
-    steps.append(
-        f"juiz (tentativa {state['attempts']}): {'aprovado' if verdict.approved else 'reprovado'} "
-        f"nota={verdict.score} - {verdict.reason}"
-    )
-    update = {"approved": verdict.approved, "steps": steps}
-    if not verdict.approved:  # feedback for the next attempt
-        update["current_input"] = JUDGE_REVISION.format(
-            question=state["question"], previous_answer=state["answer"], reason=verdict.reason
-        )
-    return update
-
-
-@traceable(name="finish")
-@timed("finish")
-def finish_node(state: ChatState) -> dict:
-    answer = state["answer"] if state["approved"] else REJECTED_ANSWER
-    if state["route"] == "recommender" and state["approved"]:
-        answer = f"{answer}\n\n{RECOMMENDER_DISCLAIMER}"
-    guard = output_guardrail(answer)
-    answer = guard.text
-    step = "guardrail de saída: ok" if guard.allowed else f"guardrail de saída: BLOQUEADO ({guard.reason})"
-
-    # Session memory: sanitized question + final answer
-    history = get_session_history(state["session_id"])
-    history.add_user_message(state["question"])
-    history.add_ai_message(answer)
-    return {"answer": answer, "output_blocked": not guard.allowed, "steps": [step]}
-
-
-# ---------------------------------------------------------------- conditional edges
-
-def after_input_guardrail(state: ChatState) -> str:
-    return END if state.get("route") == "blocked" else "router"  # route only exists if it was blocked
-
-
-def after_router(state: ChatState) -> str:
-    return "finish" if state["route"] == "out_of_scope" else "specialist"
-
-
-def after_judge(state: ChatState) -> str:
-    if state["approved"] or state["attempts"] > MAX_JUDGE_RETRIES:
-        return "finish"
-    return "specialist"  # rejected: try again with the judge feedback
-
-
-# ---------------------------------------------------------------- graph
-
-def build_graph():
-    graph = StateGraph(ChatState)
-    graph.add_node("input_guardrail", input_guardrail_node)
-    graph.add_node("router", router_node)
-    graph.add_node("specialist", specialist_node)
-    graph.add_node("judge", judge_node)
-    graph.add_node("finish", finish_node)
-
-    graph.add_edge(START, "input_guardrail")
-    graph.add_conditional_edges("input_guardrail", after_input_guardrail, ["router", END])
-    graph.add_conditional_edges("router", after_router, ["specialist", "finish"])
-    graph.add_edge("specialist", "judge")
-    graph.add_conditional_edges("judge", after_judge, ["specialist", "finish"])
-    graph.add_edge("finish", END)
-    return graph.compile()
-
-
-GRAPH = build_graph()
+def _timed(state: dict, node: str, started: float) -> None:
+    """Time of a stage for the admin panel (same node names as before: the panel groups them by stage)."""
+    state["timings"].append({"node": node, "ms": (time.perf_counter() - started) * 1000})
 
 
 class Orchestrator:
@@ -188,29 +47,101 @@ class Orchestrator:
 
     @traceable(name="orchestrator")
     def process(self, message: str) -> Result:
-        started, state, error = time.perf_counter(), None, None
+        started = time.perf_counter()
         trace_id = new_trace_id()
         tools = ToolMetricsCallback(trace_id)  # records every tool call of this question
+        state: dict = {"steps": [], "timings": [], "attempts": 0}
+        error: Exception | None = None
         # get_usage_metadata_callback adds up the tokens of every Gemini call made inside the block
         with get_usage_metadata_callback() as usage:
             try:
-                state = GRAPH.invoke(
-                    {
-                        "session_id": self.session_id,
-                        "message": message,
-                        "history": get_session_history(self.session_id).messages,
-                        "steps": [],
-                        "timings": [],
-                    },
-                    config={"callbacks": [tools]},
-                )
+                self._run(message, state, tools)
             except Exception as e:
                 error = e
                 raise
             finally:
-                record_question(trace_id, state, started, usage.usage_metadata, tools.tool_calls, error)
+                _record_in_background(trace_id, dict(state), started, dict(usage.usage_metadata),
+                                      list(tools.tool_calls), error)
         return Result(answer=state["answer"], route=state["route"], steps=state["steps"])
 
+    def _run(self, message: str, state: dict, tools: ToolMetricsCallback) -> None:
+        with trace.step("memoria.leitura", sessao=self.session_id[-8:]) as info:
+            history = get_session_history(self.session_id).messages
+            info["mensagens"] = len(history)
 
-if __name__ == "__main__":
-    print(GRAPH.get_graph().draw_mermaid())
+        t0 = time.perf_counter()
+        with trace.step("guardrail.entrada", chars=len(message)) as info:
+            guard = input_guardrail(message)
+            info["permitido"] = guard.allowed
+        _timed(state, "input_guardrail", t0)
+        if not guard.allowed:
+            state.update(route="blocked", answer=guard.reason, approved=False)
+            state["steps"].append(f"guardrail de entrada: BLOQUEADO ({guard.reason})")
+            return
+        question = guard.text
+        masked = " (dados pessoais mascarados)" if question != message.strip() else ""
+        state["steps"].append(f"guardrail de entrada: ok{masked}")
+
+        current_input, answer, approved = question, "", False
+        while True:
+            state["attempts"] += 1
+            t0 = time.perf_counter()
+            with trace.step("agente", tentativa=state["attempts"], historico=len(history)) as info:
+                output = assistant_agent(current_input, history, config={"callbacks": [tools]})
+                info.update(rota=output.route, tools=",".join(c.split("(", 1)[0] for c in output.tool_calls) or None,
+                            chars_contexto=len(output.context), chars_resposta=len(output.answer))
+            _timed(state, "specialist", t0)
+            answer, state["route"] = output.answer, output.route
+            if output.tool_calls:
+                state["steps"].append(f"tools: {', '.join(output.tool_calls)}")
+
+            t0 = time.perf_counter()
+            with trace.step("conferencia.numeros") as info:
+                missing = missing_numbers(answer, output.context) if output.context else []
+                info["fora_dos_dados"] = format_numbers(missing) or None
+            _timed(state, "judge", t0)
+            approved = not missing
+            state["steps"].append(
+                "conferência de números: ok" if approved
+                else f"conferência de números: fora dos dados -> {format_numbers(missing)}"
+            )
+            if approved or state["attempts"] > MAX_JUDGE_RETRIES:
+                break
+            current_input = REVISION.format(question=question, numbers=format_numbers(missing), previous_answer=answer)
+
+        t0 = time.perf_counter()
+        final = answer if approved else REJECTED_ANSWER
+        with trace.step("guardrail.saida") as info:
+            guard = output_guardrail(final)
+            info["permitido"] = guard.allowed
+        state["steps"].append("guardrail de saída: ok" if guard.allowed else f"guardrail de saída: BLOQUEADO ({guard.reason})")
+        with trace.step("memoria.gravacao", sessao=self.session_id[-8:]) as info:
+            session = get_session_history(self.session_id)
+            session.add_user_message(question)
+            session.add_ai_message(guard.text)
+            info["mensagens"] = len(session.messages)
+        _timed(state, "finish", t0)
+        state.update(answer=guard.text, approved=approved, output_blocked=not guard.allowed)
+
+    async def aprocess(self, message: str) -> Result:
+        """Runs process() in a worker thread (the event loop stays free for other requests)."""
+        try:
+            return await asyncio.wait_for(asyncio.to_thread(self.process, message), timeout=CHAT_TIMEOUT_S)
+        except TimeoutError as e:
+            trace.log("chat.TIMEOUT", 40, limite_s=CHAT_TIMEOUT_S,
+                      nota="a thread em andamento termina sozinha; a resposta dela é descartada")
+            raise ChatTimeoutError(
+                f"O assistente excedeu o tempo limite de {CHAT_TIMEOUT_S:.0f}s. Tente novamente em instantes."
+            ) from e
+
+
+def _record_in_background(*args) -> None:
+    """The metric is written to MongoDB after the answer, so the user never waits for it."""
+    trace_context = trace.current()
+
+    def run() -> None:
+        trace.attach(trace_context)
+        with trace.step("metricas.gravacao"):  # off the critical path: not added to the request's mongodb_ms
+            record_question(*args)
+
+    threading.Thread(target=run, name="metrics-writer", daemon=True).start()

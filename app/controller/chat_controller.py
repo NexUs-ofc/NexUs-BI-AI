@@ -1,7 +1,7 @@
 """Chat endpoints. They only receive the request, call the service and return the response."""
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 
 from app.auth.dependencies import get_current_user
 from app.schemas.api import (
@@ -18,11 +18,12 @@ User = Annotated[CurrentUser, Depends(get_current_user)]
 
 
 @router.post("", response_model=ChatResponse)
-def ask(request: ChatRequest, user: User) -> ChatResponse:
+async def ask(request: ChatRequest, user: User) -> ChatResponse:
+    """The message runs in a worker thread: the event loop keeps serving other requests."""
     try:
-        return chat_service.answer_question(request, user)
-    except chat_service.LLMError as e:
-        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(e)) from e
+        return await chat_service.answer_question_async(request, user)
+    except chat_service.ChatError as e:
+        raise HTTPException(e.status_code, e.message) from e
 
 
 @router.delete("/{session_id}", response_model=SessionClosedResponse)

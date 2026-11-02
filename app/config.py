@@ -23,9 +23,23 @@ os.environ.setdefault("LANGSMITH_PROJECT", "ceris-ms-ia-bi")
 
 # --- LLM
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
-LLM_MODEL = os.getenv("LLM_MODEL", "gemini-2.5-flash")
-LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.2"))
+LLM_MODEL = os.getenv("LLM_MODEL", "gemini-3.8-flash")
+LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.2"))  # só para gemini-2.x (o 3.x não aceita temperature)
+# Raciocínio do Gemini 3.x (low | medium | high). O padrão do modelo é medium; para chat em tempo real a
+# Google recomenda low. Mudar aqui altera latência e custo, não o modelo.
+LLM_THINKING_LEVEL = os.getenv("LLM_THINKING_LEVEL", "low").strip().lower()
+LLM_TIMEOUT_S = float(os.getenv("LLM_TIMEOUT_S", "30"))  # limite de cada chamada ao Gemini (o NexUs-AI usa o mesmo)
+# Modelo de reserva: se o principal falhar (503 "alta demanda", 429, timeout, rede), a MESMA chamada é refeita
+# nele, sem o usuário esperar o limite do principal de novo. Vazio desliga a reserva.
+LLM_FALLBACK_MODEL = os.getenv("LLM_FALLBACK_MODEL", "gemini-3.5-flash-lite").strip()
+# Novas tentativas do SDK em 408/409/429/5xx e falha de conexão. Sem isso o google-genai 2.33 faz até 3 (4
+# requisições por chamada, com espera de até 30s, sem log). 0 vale como 1: o SDK não deixa desligar.
+# Cada tentativa aparece no log como "gemini.http" (WARNING quando falha).
+LLM_MAX_RETRIES = int(os.getenv("LLM_MAX_RETRIES", "1"))
+# Se a resposta citar número que não está nos dados consultados, o agente refaz a resposta até N vezes
 MAX_JUDGE_RETRIES = int(os.getenv("MAX_JUDGE_RETRIES", "1"))
+# Limite da requisição inteira do chat (o front espera; acima disso devolve erro claro)
+CHAT_TIMEOUT_S = float(os.getenv("CHAT_TIMEOUT_S", "120"))
 
 # --- API and authentication (same scheme as NexUs-AI: X-API-Key + Bearer JWT issued by the Auth service)
 API_KEY = os.getenv("API_KEY", "")  # key required in the X-API-Key header
@@ -36,6 +50,10 @@ DAILY_TOKEN_LIMIT = int(os.getenv("DAILY_TOKEN_LIMIT", "0"))
 JWT_SECRET = os.getenv("JWT_SECRET_BASE64", "")  # same name and value as in the Auth service (Base64)
 JWT_ALGORITHM = "HS256"
 JWT_ISSUER = "nexus-auth"  # value of the "iss" claim written by the Auth service
+# Perfis do token que podem usar o chat (mesma regra de leitura dos relatórios). COMPANY precisa estar ativa.
+CHAT_PROFILES = {p.strip().upper() for p in os.getenv("CHAT_PROFILES", "COMPANY,ADMIN").split(",") if p.strip()}
+# false = não consulta o Postgres para validar a empresa (só para testes locais; em produção deixe true)
+REQUIRE_ACTIVE_COMPANY = os.getenv("CHAT_REQUIRE_ACTIVE_COMPANY", "true").strip().lower() not in ("false", "0", "no")
 
 # --- Qdrant (FAQ)
 QDRANT_URL = os.getenv("QDRANT_URL", "")  # use ":memory:" to test without a server
@@ -56,6 +74,13 @@ MONGODB_REPORTS_COLLECTION = os.getenv("MONGODB_REPORTS_COLLECTION", "reports")
 REPORTS_LATEST_LIMIT = int(os.getenv("REPORTS_LATEST_LIMIT", "3"))  # default for "most recent reports"
 REPORTS_MAX_MONTHS = int(os.getenv("REPORTS_MAX_MONTHS", "24"))  # largest period a single search may cover
 REPORTS_MAX_CHARS = int(os.getenv("REPORTS_MAX_CHARS", "60000"))  # cap on what one tool call sends to the LLM
+
+# --- Upstash Redis (rankings de produtos)
+# REST URL e token do seu projeto em https://console.upstash.com/redis
+# Aceita tanto o padrão do projeto (REDIS_REST_*) quanto o nome que o Upstash
+# exporta por padrão no dashboard (UPSTASH_REDIS_*).
+REDIS_REST_URL = os.getenv("REDIS_REST_URL") or os.getenv("UPSTASH_REDIS_URL", "")
+REDIS_REST_TOKEN = os.getenv("REDIS_REST_TOKEN") or os.getenv("UPSTASH_REDIS_TOKEN", "")
 
 
 def validate_config() -> list[str]:

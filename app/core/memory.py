@@ -1,10 +1,13 @@
-"""Short-term memory: lives only while the process (server) is running.
+"""Short-term memory: one history per session, alive only while the process (server) is running.
 
-Nothing is written to disk or a database. Restarting the server wipes everything.
+Nothing is written to disk or a database. Restarting the server wipes everything, and a new session
+starts empty: there is no memory across sessions.
 """
+import threading
+
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 
-MAX_MESSAGES = 20  # window: only the last N messages go into the prompts
+MAX_MESSAGES = 20  # window: only the last N messages go into the prompt
 
 
 class SessionHistory:
@@ -22,16 +25,17 @@ class SessionHistory:
         self._messages.append(AIMessage(content=text))
 
 
-# Message history of each session, keyed by session_id
+# Message history of each session, keyed by session_id. Messages run in worker threads, hence the lock.
 store: dict[str, SessionHistory] = {}
+_lock = threading.Lock()
 
 
 def get_session_history(session_id: str) -> SessionHistory:
     """Return the history of a session (creates it if it does not exist)."""
-    if session_id not in store:
-        store[session_id] = SessionHistory()
-    return store[session_id]
+    with _lock:
+        return store.setdefault(session_id, SessionHistory())
 
 
 def clear_session(session_id: str) -> None:
-    store.pop(session_id, None)
+    with _lock:
+        store.pop(session_id, None)

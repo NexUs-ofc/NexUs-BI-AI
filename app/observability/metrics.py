@@ -5,7 +5,7 @@
 - tool_metrics_bi: one document per tool call, collected by ToolMetricsCallback (LangChain callback).
 Both share the trace_id of the question. services/metrics_service.py turns them into the report.
 """
-import functools
+import logging
 import time
 import uuid
 from datetime import UTC, datetime
@@ -14,26 +14,11 @@ from langchain_core.callbacks import BaseCallbackHandler
 
 from app.config import LLM_MODEL
 from app.model.llm import is_quota_error
+from app.observability import trace
 from app.observability.cost import estimate_cost_usd
 from app.repository.metrics_repository import save_metric, save_tool_calls
 
 SPECIALIST_ROUTES = {"faq", "analyst", "recommender"}
-
-
-def timed(node_name: str):
-    """Decorator for graph nodes: adds how long the node took to the "timings" field of the state."""
-
-    def decorator(node):
-        @functools.wraps(node)
-        def run(state):
-            start = time.perf_counter()
-            update = node(state)
-            update["timings"] = [{"node": node_name, "ms": (time.perf_counter() - start) * 1000}]
-            return update
-
-        return run
-
-    return decorator
 
 
 def new_trace_id() -> str:
@@ -117,4 +102,4 @@ def record_question(
         save_metric(document)
         save_tool_calls(tool_calls)
     except Exception as e:  # noqa: BLE001 - metrics must never break the answer
-        print(f"[metrics] ATENÇÃO: não foi possível salvar a métrica: {e}")
+        trace.log("metricas.ERRO", logging.WARNING, erro=type(e).__name__, detalhe=trace.redact(e))
