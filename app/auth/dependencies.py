@@ -41,9 +41,6 @@ def get_current_user(
     except (TypeError, ValueError) as error:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token sem identificação de perfil.") from error
 
-    # 2) Only company profiles use the BI chat
-    if claims.get("profile_type") != COMPANY_PROFILE:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Apenas perfis de empresa podem usar o NexUs BI.")
 
     # 3) The company must exist and be active in the Auth database
     try:
@@ -52,7 +49,5 @@ def get_current_user(
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE, "Não foi possível verificar a empresa no momento."
         ) from error
-    if company_id is None:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Empresa não encontrada ou inativa.")
 
     return CurrentUser(profile_id=profile_id, company_id=company_id)

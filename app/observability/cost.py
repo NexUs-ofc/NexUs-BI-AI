@@ -16,8 +16,8 @@ from app.config import LLM_MODEL, today_in_brazil
 
 # model -> (input price, output price) in US$ per 1M tokens
 PRICES_USD_PER_1M_TOKENS = {
-    "gemini-2.5-flash": (0.30, 2.50),
-    "gemini-2.5-flash-lite": (0.10, 0.40),
+    "gemini-3.8-flash": (0.30, 2.50),
+    "gemini-3.8-flash-lite": (0.10, 0.40),
     "gemini-2.5-pro": (1.25, 10.00),
 }
 
@@ -62,7 +62,7 @@ def estimate_cost_usd(usage_by_model: dict) -> float:
     """Cost of every LLM call of one question.
 
     usage_by_model comes from LangChain's get_usage_metadata_callback:
-    {"gemini-2.5-flash": {"input_tokens": 1200, "output_tokens": 300, ...}, ...}
+    {"gemini-3.8-flash": {"input_tokens": 1200, "output_tokens": 300, ...}, ...}
     """
     total = 0.0
     for model, usage in usage_by_model.items():
