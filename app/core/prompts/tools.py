@@ -50,3 +50,5 @@ ALL_NUMBERS_FOUND = "Todos os números relevantes da resposta aparecem no contex
 NUMBERS_NOT_FOUND = "Números da resposta que NÃO aparecem no contexto: {numbers}"
 NO_NUMBERS = "A resposta não tem números relevantes para conferir."
 TERM_NOT_FOUND = "O termo '{term}' não aparece no contexto."
+
+QDRANT_UNAVAILABLE = "(O serviço de busca do FAQ está temporariamente indisponível. Responda com base no seu conhecimento geral sobre o sistema.)"
