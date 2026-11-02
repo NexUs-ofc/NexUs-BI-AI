@@ -23,7 +23,7 @@ os.environ.setdefault("LANGSMITH_PROJECT", "ceris-ms-ia-bi")
 
 # --- LLM
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
-LLM_MODEL = os.getenv("LLM_MODEL", "gemini-2.5-flash")
+LLM_MODEL = os.getenv("LLM_MODEL", "gemini-3.8-flash")
 LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.2"))
 MAX_JUDGE_RETRIES = int(os.getenv("MAX_JUDGE_RETRIES", "1"))
 
@@ -59,8 +59,10 @@ REPORTS_MAX_CHARS = int(os.getenv("REPORTS_MAX_CHARS", "60000"))  # cap on what 
 
 # --- Upstash Redis (rankings de produtos)
 # REST URL e token do seu projeto em https://console.upstash.com/redis
-REDIS_REST_URL = os.getenv("REDIS_REST_URL", "")
-REDIS_REST_TOKEN = os.getenv("REDIS_REST_TOKEN", "")
+# Aceita tanto o padrão do projeto (REDIS_REST_*) quanto o nome que o Upstash
+# exporta por padrão no dashboard (UPSTASH_REDIS_*).
+REDIS_REST_URL = os.getenv("REDIS_REST_URL") or os.getenv("UPSTASH_REDIS_URL", "")
+REDIS_REST_TOKEN = os.getenv("REDIS_REST_TOKEN") or os.getenv("UPSTASH_REDIS_TOKEN", "")
 
 
 def validate_config() -> list[str]:
