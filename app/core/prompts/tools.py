@@ -14,13 +14,12 @@ Exemplos (supondo hoje = 15/07/2026):
 
 GET_LATEST_REPORTS_DESCRIPTION = """Busca os relatórios consolidados mais recentes.
 Use quando o usuário perguntar sobre os indicadores ou a empresa SEM citar mês, ano ou período.
-O parâmetro limit define quantos meses trazer: padrão 3; use 1 para "o último relatório" e mais
-apenas se precisar comparar vários meses.
-Exemplos: "quais os principais KPIs?" -> limit=3; "como foi o último mês fechado?" -> limit=1"""
+O parâmetro limit define quantos meses trazer: use 1 para "os indicadores atuais" ou "o último mês" e 2 a 3
+apenas para comparar meses ou ver tendência (cada mês a mais deixa a resposta mais lenta).
+Exemplos: "quais os principais KPIs?" -> limit=1; "como evoluiu o desperdício?" -> limit=3"""
 
 NO_REPORTS_FOUND = "Nenhum relatório encontrado para {scope}."
 INVALID_PERIOD = "Período inválido: {reason}"
-NO_TOOL_CALLED = "(Nenhum relatório foi consultado.)"
 
 # --- FAQ retriever (FAQ agent)
 SEARCH_FAQ_DESCRIPTION = """Busca no FAQ oficial da empresa (base vetorial) os itens mais parecidos com a consulta.
@@ -31,24 +30,8 @@ Exemplos: "qual o horário do suporte?" -> query="horário do suporte";
 "de onde vêm os dados e quando atualizam?" -> query="origem dos dados" e query="frequência de atualização dos relatórios"."""
 
 NO_FAQ = "(A busca no FAQ não encontrou itens para esta consulta.)"
-FAQ_OUTDATED = (
-    "(O FAQ no Qdrant está em um formato antigo, sem os campos question/answer. "
-    "Rode: python -m app.services.faq_service)"
-)
-FAQ_NOT_INDEXED = (
-    "(O FAQ não está indexado no Qdrant: a collection não existe ou está vazia. "
-    "Rode: python -m app.services.faq_service)"
-)
-FAQ_NOT_SEARCHED = "(A tool search_faq NÃO foi chamada: nenhum item do FAQ foi consultado.)"
 
-# --- Validation tools (Judge agent)
-SEARCH_CONTEXT_DESCRIPTION = """Procura um termo (nome de região, produto, mês, regra, horário) no CONTEXTO e
-retorna as linhas onde ele aparece. Use para confirmar se um fato citado na resposta existe no contexto.
-Exemplo: term="Sudeste" ou term="horário"."""
-
+# --- Conferência de números (orchestrator + tools/judge_tools.py)
 ALL_NUMBERS_FOUND = "Todos os números relevantes da resposta aparecem no contexto."
 NUMBERS_NOT_FOUND = "Números da resposta que NÃO aparecem no contexto: {numbers}"
 NO_NUMBERS = "A resposta não tem números relevantes para conferir."
-TERM_NOT_FOUND = "O termo '{term}' não aparece no contexto."
-
-QDRANT_UNAVAILABLE = "(O serviço de busca do FAQ está temporariamente indisponível. Responda com base no seu conhecimento geral sobre o sistema.)"

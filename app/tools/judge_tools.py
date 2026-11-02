@@ -1,28 +1,20 @@
-"""Validation used by the Judge agent to mitigate hallucinations (plain Python, no LLM: deterministic).
+"""Conferência dos números da resposta contra os dados consultados (Python puro, sem LLM: determinística).
 
-- check_numbers: numbers of the answer that do not appear in the context. It ALWAYS runs (called by the
-  code in core/judge.py), because an LLM with structured output may skip optional tools.
-- search_context: tool the judge LLM may call to confirm names and facts (region, product, schedule...).
-
-The answer and the context are bound when the tool is built, so the LLM cannot change them.
+Substitui o juiz por LLM: em vez de uma ou duas chamadas extras ao Gemini com todo o contexto, o código
+lista os números relevantes da resposta que não aparecem no que as tools devolveram. Aceita:
+- o mesmo número escrito de outro jeito (1.250.000 | 1250000 | 4,2 | 4.2);
+- arredondamento do dado para 0, 1 ou 2 casas (14,07 no relatório -> 14,1 na resposta);
+- soma ou diferença de dois números do contexto (o prompt manda mostrar a conta: 15,0 - 14,1 = 0,9).
 """
 import re
-import unicodedata
 
-from langchain_core.tools import StructuredTool
 from langsmith import traceable
 
-from app.core.prompts.tools import (
-    ALL_NUMBERS_FOUND,
-    NO_NUMBERS,
-    NUMBERS_NOT_FOUND,
-    SEARCH_CONTEXT_DESCRIPTION,
-    TERM_NOT_FOUND,
-)
+from app.core.prompts.tools import ALL_NUMBERS_FOUND, NO_NUMBERS, NUMBERS_NOT_FOUND
 
 _NUMBER = re.compile(r"\d[\d.,]*\d|\d")
 _THOUSANDS = re.compile(r"\d{1,3}(\.\d{3})+")  # 1.250.000 (Brazilian thousands separator)
-MAX_LINES = 10
+_MAX_CONTEXT_NUMBERS = 5000  # above this the sum/difference check is skipped (cost grows with the context)
 
 
 def _to_float(raw: str) -> float | None:
@@ -47,31 +39,43 @@ def _is_relevant(number: float) -> bool:
     return not (number <= 31 or (number.is_integer() and 1900 <= number <= 2100))
 
 
-def _normalize(text: str) -> str:
-    return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode().lower()
-
-
 def _format(number: float) -> str:
     return str(int(number)) if number.is_integer() else str(number)
 
 
+def _known(number: float, rounded: set[float], context: list[float]) -> bool:
+    if round(number, 2) in rounded:
+        return True
+    if len(context) > _MAX_CONTEXT_NUMBERS:
+        return False
+    for a in context:  # number = a + b  or  number = |a - b|
+        if round(number - a, 2) in rounded or round(a - number, 2) in rounded or round(a + number, 2) in rounded:
+            return True
+    return False
+
+
+def missing_numbers(answer: str, context: str) -> list[float]:
+    """Relevant numbers of the answer that are not in the context (nor a rounding/sum/difference of them)."""
+    context_numbers = sorted(extract_numbers(context))
+    rounded: set[float] = set()
+    for n in context_numbers:
+        for digits in (0, 1, 2):
+            rounded.add(round(n, digits))
+            rounded.add(-round(n, digits))
+    relevant = sorted(n for n in extract_numbers(answer) if _is_relevant(n))
+    return [n for n in relevant if not _known(n, rounded, context_numbers)]
+
+
 @traceable(name="check_numbers")
 def check_numbers(answer: str, context: str) -> str:
-    """List the relevant numbers of the answer that are not in the context."""
-    context_numbers = extract_numbers(context)
-    relevant = sorted(n for n in extract_numbers(answer) if _is_relevant(n))
-    if not relevant:
+    """Readable version of missing_numbers (debug steps and metrics)."""
+    if not any(_is_relevant(n) for n in extract_numbers(answer)):
         return NO_NUMBERS
-    missing = [n for n in relevant if n not in context_numbers and -n not in context_numbers]
+    missing = missing_numbers(answer, context)
     if not missing:
         return ALL_NUMBERS_FOUND
-    return NUMBERS_NOT_FOUND.format(numbers=", ".join(_format(n) for n in missing))
+    return NUMBERS_NOT_FOUND.format(numbers=format_numbers(missing))
 
 
-def build_judge_tools(context: str) -> list[StructuredTool]:
-    def search_context(term: str) -> str:
-        wanted = _normalize(term)
-        lines = [line for line in re.split(r"\n|(?<=[,{}\[\]])", context) if wanted in _normalize(line)]
-        return "\n".join(line.strip() for line in lines[:MAX_LINES]) or TERM_NOT_FOUND.format(term=term)
-
-    return [StructuredTool.from_function(search_context, name="search_context", description=SEARCH_CONTEXT_DESCRIPTION)]
+def format_numbers(numbers: list[float]) -> str:
+    return ", ".join(_format(n) for n in numbers)
