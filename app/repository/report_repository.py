@@ -37,8 +37,10 @@ _PERIOD_FIELDS = {
 }
 _PERIOD_KEY = {"$addFields": {"_period": {"$add": [{"$multiply": ["$_year", 100]}, "$_month"]}}}
 # Internal fields of the generator that the agents do not need (status, quality check, PDF path...)
+# acoes_app (rules for the mobile app), fonte_dados and gerado_em are not used to answer and only add tokens.
 _HIDE_HELPERS = {"$project": {"_id": 0, "_year": 0, "_month": 0, "_period": 0, "periodo": 0, "status": 0,
-                              "qualidade": 0, "pdf": 0, "versao_schema": 0, "gerado_com_ia": 0}}
+                              "qualidade": 0, "pdf": 0, "versao_schema": 0, "gerado_com_ia": 0,
+                              "acoes_app": 0, "fonte_dados": 0, "gerado_em": 0}}
 _NEWEST_FIRST = {"$sort": {"_year": -1, "_month": -1}}
 
 
