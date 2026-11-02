@@ -47,13 +47,13 @@ def _ranking_key(category: str, state: str | None) -> str:
 def _zrevrange_with_scores(key: str) -> list[tuple[str, float]]:
     """Executa ZREVRANGE … 0 4 WITHSCORES e devolve lista de (member, score).
 
-    Devolve lista vazia se a chave não existir ou se o Redis estiver indisponível.
+    upstash-redis>=1.0 com WITHSCORES retorna List[Tuple[str, float]] após
+    passar por format_sorted_set_response — não uma lista de dicts.
+    Devolve lista vazia se a chave não existir.
     """
     redis = _get_redis()
-    # upstash-redis devolve lista de dicts [{"member": ..., "score": ...}]
-    # quando WITHSCORES=True
-    raw: list[dict] = redis.zrevrange(key, 0, _TOP_N - 1, withscores=True)
-    return [(item["member"], float(item["score"])) for item in raw]
+    raw: list[tuple[str, float]] = redis.zrevrange(key, 0, _TOP_N - 1, withscores=True)
+    return [(member, float(score)) for member, score in raw]
 
 
 def get_registered_ranking(state: str | None = None) -> list[tuple[str, float]]:
