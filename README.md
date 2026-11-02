@@ -1,9 +1,10 @@
 # NexUs BI AI
 
-Assistente multiagente de Business Intelligence (API FastAPI). A empresa pergunta em português e o
-sistema responde sobre o NexUs BI ou sobre os relatórios mensais, com um juiz conferindo cada resposta.
+Assistente de Business Intelligence (API FastAPI). A empresa pergunta em português e o sistema responde
+sobre o NexUs BI (FAQ no Qdrant) ou sobre os relatórios mensais (MongoDB), conferindo cada número da
+resposta contra os dados consultados.
 
-**Stack:** Python · FastAPI · LangChain 1.x (`create_agent`) · LangGraph · Gemini · Qdrant · MongoDB · PostgreSQL · LangSmith
+**Stack:** Python · FastAPI · LangChain 1.x (`create_agent`) · Gemini (Interactions API) · Qdrant · MongoDB · PostgreSQL · LangSmith
 
 O projeto tem duas partes:
 
@@ -59,8 +60,17 @@ As rotas `/chat` exigem dois headers (mesmo esquema do NexUs-AI):
 | `X-API-Key` | chave da aplicação (`API_KEY` do `.env`) |
 | `Authorization: Bearer <token>` | token do login no site, emitido pelo NexUs-Auth |
 
-O token precisa ser de um perfil **COMPANY** com empresa **ACTIVE** no PostgreSQL do Auth; outros perfis
-recebem 403. Para testar sem o site, gere um token com `python -m app.auth.jwt_handler <profile_id>`.
+O token precisa ser de um perfil de `CHAT_PROFILES` (padrão `COMPANY,ADMIN`, os mesmos que leem os
+relatórios). COMPANY precisa ter empresa **ACTIVE** no PostgreSQL do Auth; HOUSEHOLD e STORE recebem 403.
+Para testar sem o site: `python -m app.auth.jwt_handler <profile_id> [COMPANY|ADMIN]`.
+
+Erros do `POST /chat` (o campo `detail` diz o motivo e o front mostra como veio):
+
+| Status | Quando |
+|---|---|
+| 503 | MongoDB, Qdrant ou PostgreSQL fora do ar ou mal configurado (ex.: FAQ não indexado). Nunca responde com dado inventado |
+| 502 | a chamada ao Gemini falhou (cota, chave, modelo, rede) |
+| 504 | a pergunta passou de `CHAT_TIMEOUT_S` |
 
 | Rota | O que faz |
 |---|---|
@@ -84,34 +94,35 @@ Para continuar uma conversa, reenvie o `session_id`. Com `"debug": true` a respo
 
 ## Como funciona
 
-O orquestrador é um **grafo do LangGraph**: cada etapa é um nó e as decisões são arestas.
+O orquestrador (`app/core/orchestrator.py`) é Python puro, sem grafo:
 
 ```
-input_guardrail ──bloqueado──> fim
+guardrail de entrada (regras, sem LLM) ──bloqueado──> responde o motivo
        │
-     router ──fora de escopo──> finish
-       │
-   specialist <───┐ reprovado (refaz 1x)
-       │          │
-     judge ───────┘
-       │ aprovado
-     finish (guardrail de saída + memória) ──> fim
+   assistente: 1 agente (Gemini) com as tools search_faq, search_reports_by_period, get_latest_reports
+       │                     ▲
+ conferência de números ─────┘ número fora dos dados -> refaz 1x (MAX_JUDGE_RETRIES), depois desiste
+ (código, sem LLM)
+       │ ok
+ guardrail de saída + memória da sessão ──> resposta
 ```
 
-| Agente | Papel | Ferramentas |
+| Etapa | O que faz | Chamadas ao Gemini |
 |---|---|---|
-| Guardrails | bloqueiam injeção de prompt, perguntas sobre o sistema e pedidos ilegais; mascaram CPF, e-mail etc. | regras fixas (sem LLM) |
-| Roteador | escolhe `faq`, `analyst`, `recommender` ou `out_of_scope` | saída estruturada |
-| FAQ | dúvidas sobre o NexUs BI e conceitos de BI | `search_faq` (Qdrant) |
-| Analista | descreve os números dos relatórios | `search_reports_by_period`, `get_latest_reports` |
-| Recomendador | insights e **previsão** de tendência; nunca decide | mesmas do analista |
-| Juiz | reprova alucinação, desvio de papel e partes ignoradas | checagem automática de números + `search_context` |
+| Guardrails | bloqueiam injeção de prompt, perguntas sobre o sistema e pedidos ilegais; mascaram CPF, e-mail etc. | 0 |
+| Assistente | decide se precisa do FAQ (Qdrant) ou dos relatórios (MongoDB), consulta e responde. Descreve números, aponta percepções/tendências e nunca decide | 1 sem tool (saudação, conceito de BI); 2 com uma tool |
+| Conferência de números | todo número relevante da resposta precisa estar nos dados consultados (aceita arredondamento e a conta mostrada: soma/diferença de dois dados) | 0 |
 
-Os prompts ficam em `app/core/prompts/`, um arquivo por agente, com regras e exemplos (few-shot).
+A rota devolvida (`route`) vem das tools usadas: `analyst` leu relatórios, `faq` consultou o FAQ ou não
+precisou de dados. O prompt fica em `app/core/prompts/assistant.py`.
 
-**Princípio da inferência:** cada agente recebe **dados novos** (pergunta, relatórios, FAQ) e aplica o
-**conhecimento aprendido** (o modelo pré-treinado + regras e exemplos do prompt) para gerar uma **resposta**
-(FAQ, analista), uma **previsão** (recomendador) ou uma **decisão** (roteador, juiz).
+Antes eram roteador + 3 especialistas + juiz por LLM: de 4 a 12 chamadas ao Gemini em série por pergunta.
+Escolher a fonte é o que o tool calling já faz, e a checagem de números do juiz já era código.
+
+**Gemini 3.x:** o wrapper `ChatGoogleInteractions` (`app/model/llm.py`) devolve ao modelo os passos
+`thought` (com a assinatura) de cada chamada de tool, não envia `temperature` (o Gemini 3 não aceita) e usa
+`LLM_THINKING_LEVEL` (padrão `low`, o indicado para chat em tempo real). O SDK repete sozinho chamadas com
+erro 408/409/429/5xx: `LLM_MAX_RETRIES` limita isso (sem configurar seriam até 4 requisições por chamada).
 
 ## Dados
 
@@ -120,12 +131,18 @@ Os prompts ficam em `app/core/prompts/`, um arquivo por agente, com regras e exe
 | Qdrant | FAQ (`app/static/faq.json`); rode o `faq_service` sempre que editar o JSON |
 | MongoDB `db_ceris` | relatórios mensais gerados pelo `report_generator` (um por mês, igual para todas as empresas; o chatbot só lê os publicados) e métricas |
 | PostgreSQL do Auth | confere se a empresa do token existe e está ativa |
-| Memória | só em RAM, por empresa + sessão; reiniciar o servidor apaga |
+| Memória | só em RAM, por empresa + sessão (últimas 20 mensagens); reiniciar o servidor apaga. Não há memória entre sessões |
 
 ## Observabilidade
 
+- **Terminal:** cada `POST /chat` gera linhas `[req=<id>]` com início, fim e tempo de cada etapa (auth/Postgres,
+  memória, guardrails, cada chamada ao Gemini com tokens e tamanho da entrada, embedding, Qdrant, MongoDB,
+  conferência, gravação da memória) e um resumo que separa o tempo por serviço externo:
+  `requisicao.fim status=200 total_ms=2245.6 gemini_ms=2082.5(2x) mongodb_ms=0.3(1x) postgres_ms=120.2(1x) backend_ms=42.6`.
+  O mesmo id volta no header `X-Request-Id`. Nunca loga pergunta, resposta, chaves ou senhas (só tamanhos).
+  `LOG_LEVEL=DEBUG` mostra também cada tentativa HTTP ao Gemini.
 - **LangSmith:** com `LANGSMITH_TRACING=true`, cada pergunta vira uma árvore no projeto `ceris-ms-ia-bi`
-  (orquestrador → nós do grafo com `@traceable` → agentes, Gemini e tools).
+  (orquestrador → agente, Gemini, tools e conferência de números).
 - **MongoDB:** coleções próprias do web, separadas das do mobile e ligadas pelo `trace_id`:
   `metrics_bi` (uma por pergunta) e `tool_metrics_bi` (uma por chamada de tool).
 - **`GET /admin/metrics`:** a página do BI IA no painel do administrador, no mesmo formato da página da IA do
@@ -142,13 +159,13 @@ app/
   app.py, config.py   API e variáveis do .env
   controller/         rotas (só chamam os services)
   services/           chat, FAQ (ingestão), relatório de métricas e painel do administrador
-  core/               agentes, grafo do orquestrador e memória
-  core/prompts/       prompts e descrições das tools
-  tools/              tools dos agentes (relatórios, FAQ, juiz)
+  core/               assistente, orquestrador, memória e erros
+  core/prompts/       prompt do assistente, regras de segurança e descrições das tools
+  tools/              tools (relatórios, FAQ) e conferência de números
   guardrails/         regras de entrada e saída
   auth/               X-API-Key e JWT
   repository/         Qdrant, MongoDB e PostgreSQL
-  observability/      custo e métricas
+  observability/      logs por requisição (trace.py), custo e métricas
   model/              LLM e embeddings (Gemini)
   schemas/            contratos da API e entre agentes
 ```
