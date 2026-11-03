@@ -4,7 +4,7 @@ Assistente de Business Intelligence (API FastAPI). A empresa pergunta em portugu
 sobre o NexUs BI (FAQ no Qdrant) ou sobre os relatórios mensais (MongoDB), conferindo cada número da
 resposta contra os dados consultados.
 
-**Stack:** Python · FastAPI · LangChain 1.x (`create_agent`) · Gemini (Interactions API) · Qdrant · MongoDB · PostgreSQL · LangSmith
+**Stack:** Python · FastAPI · LangChain 1.x (`create_agent`) · Gemini (Interactions API) · Qdrant · MongoDB · PostgreSQL · Redis (Upstash) · Databricks · Playwright · LangSmith
 
 O projeto tem duas partes:
 
@@ -18,11 +18,14 @@ O projeto tem duas partes:
 ```bash
 pip install -r requirements.txt
 cp .env.example .env                    # preencha as variáveis (veja o próprio arquivo)
+python -m playwright install chromium   # uma vez por máquina (gera o PDF dos relatórios)
 python -m app.model.llm                 # 1. a chave do Gemini funciona?
 python -m app.services.faq_service      # 2. carrega o FAQ no Qdrant
 python -m app.auth.jwt_handler <id>     # 3. gera um token de teste
 python -m uvicorn app.app:app --reload  # 4. sobe a API: http://localhost:8000/docs
 ```
+
+Testes: `pip install -r report_generator/requirements-dev.txt` e depois `python -m pytest tests report_generator/tests -q`.
 
 ## Comandos do projeto
 
@@ -91,6 +94,13 @@ estas rotas. O contrato completo está em [Painel do administrador](docs/painel-
 | `GET /admin/roi` | custo, cenários para 100 e 1000 usuários e ROI em reais (era `GET /metrics/report`) |
 
 Para continuar uma conversa, reenvie o `session_id`. Com `"debug": true` a resposta mostra o passo a passo.
+
+Relatórios e rankings usam os mesmos headers do `/chat` (`X-API-Key` + token Bearer):
+
+| Rota | O que faz |
+|---|---|
+| `GET /dashboard` e `GET /reports/...` | dados do dashboard e lista, JSON e PDF dos relatórios mensais. Contrato em [report_generator/README.md](report_generator/README.md#api-para-a-interface-web) |
+| `GET /api/rankings/products?state=SP` | top 5 produtos mais registrados e mais vencidos, geral ou por UF (detalhes em [Dados](#dados)) |
 
 ## Como funciona
 
@@ -177,6 +187,10 @@ app/
   observability/      logs por requisição (trace.py), custo e métricas
   model/              LLM e embeddings (Gemini)
   schemas/            contratos da API e entre agentes
+report_generator/     gerador de relatórios e rotas /dashboard e /reports (README próprio)
+tests/                testes da API (chat, admin, rankings)
+scripts/              diagnóstico da chave do Gemini
+docs/, k8s/           painel do administrador, containers e manifests Kubernetes
 ```
 
 ## Containers e Kubernetes
