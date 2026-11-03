@@ -64,7 +64,7 @@ EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", "768"))
 FAQ_TOP_K = int(os.getenv("FAQ_TOP_K", "4"))  # how many FAQ items go into the prompt
 FAQ_PATH = ROOT_DIR / os.getenv("FAQ_PATH", "app/static/faq.json")  # ingestion source
 
-# --- PostgreSQL of the Auth service (only to check that the logged-in company exists and is active)
+# --- PostgreSQL compartilhado: empresa ativa e catálogo de alimentos
 PGSQL_URL = os.getenv("PGSQL_URL", "")  # postgresql://user:password@host:5432/database
 
 # --- MongoDB (consolidated reports)

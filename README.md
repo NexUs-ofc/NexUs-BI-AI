@@ -130,8 +130,17 @@ erro 408/409/429/5xx: `LLM_MAX_RETRIES` limita isso (sem configurar seriam até 
 |---|---|
 | Qdrant | FAQ (`app/static/faq.json`); rode o `faq_service` sempre que editar o JSON |
 | MongoDB `db_ceris` | relatórios mensais gerados pelo `report_generator` (um por mês, igual para todas as empresas; o chatbot só lê os publicados) e métricas |
-| PostgreSQL do Auth | confere se a empresa do token existe e está ativa |
+| PostgreSQL compartilhado | confere se a empresa do token existe e está ativa e consulta os nomes em `public.food` para os rankings |
+| Redis (Upstash) | rankings de produtos registrados e vencidos, geral ou por UF, atualizados pelo Core |
 | Memória | só em RAM, por empresa + sessão (últimas 20 mensagens); reiniciar o servidor apaga. Não há memória entre sessões |
+
+O endpoint `GET /api/rankings/products` retorna os rankings `registered` e `expired`, com até cinco
+produtos em cada lista. `?state=SP` seleciona o ranking estadual. Cada produto contém `productId`,
+`productName` e `score`: o Redis guarda o ID e a pontuação; uma consulta ao PostgreSQL resolve os nomes
+dos dois rankings usando a conexão `PGSQL_URL`, que precisa de permissão de leitura em `public.food`.
+Membros que não sejam IDs válidos ou não existam no catálogo não são exibidos. Ausência de dados retorna
+listas vazias; falha de acesso ao Redis ou PostgreSQL retorna HTTP 503. `registered` conta cadastros de
+itens no estoque, não consumo. O ranking estadual não recebe valores do ranking geral como substituição.
 
 ## Observabilidade
 

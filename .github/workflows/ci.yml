@@ -47,6 +47,11 @@ jobs:
       - name: Compile sources
         run: python -m compileall app report_generator
 
+      - name: Run ranking tests
+        run: |
+          pip install pytest
+          python -m pytest tests/test_rankings.py -q
+
   report-generator-tests:
     name: Report generator tests
     runs-on: ubuntu-latest
